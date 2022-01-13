@@ -36,13 +36,13 @@
 (deflayer db-table-layer (db-layer)
   ((direct-slot-class
     :initarg :direct-slot-class
-    :initform 'stw-column-slot-definition
+    :initform 'db-column-slot-definition
     :reader direct-slot-class))
   (:metaclass stw-db-context))
 
 (deflayer db-interface-layer (db-layer)
   ((direct-slot-class
     :initarg :direct-slot-class
-    :initform 'stw-aggregate-slot-definition
+    :initform 'db-aggregate-slot-definition
     :reader direct-slot-class))
   (:metaclass stw-db-context))
