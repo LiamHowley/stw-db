@@ -63,7 +63,7 @@ Set as alist ((COLUMN . VALUE))")))
   :in db-table-layer (base-class)
   ((schema :initarg :schema :reader schema :type string)
    (table :initarg :table :initform nil :reader table :type string)
-   (primary-keys :initarg :primary-keys :initform nil :accessor primary-keys :type (null cons)
+   (primary-keys :initarg :primary-keys :initform nil :accessor primary-keys :type (null cons))
    (foreign-keys :initarg :foreign-keys :initform nil :accessor foreign-keys :type (null cons))
    (referenced-by :initarg :referenced-by :initform nil :accessor referenced-by :type (cons null))
    (constraints :initarg :constraints :initform nil :reader constraints :type (null cons))
@@ -71,7 +71,7 @@ Set as alist ((COLUMN . VALUE))")))
 
 
 (defmethod partial-class-base-initargs append ((class db))
-  '(:schema :table :primary-keys :foreign-keys :constraints))
+  '(:schema :table :primary-keys :foreign-keys :referenced-by :constraints))
 
 
 (defclass db-column-slot-definition (stw-direct-slot-definition)
@@ -124,29 +124,28 @@ Set as alist ((COLUMN . VALUE))")))
 
 (defmethod initialize-instance :after ((slot db-aggregate-slot-definition) &key)
   (with-slots (maps-table maps-columns maps-column express-as-type) slot
-
     (let ((slot-name (slot-definition-name slot)))
-    ;; maps table must correspond to a class
-    (unless (and maps-table (find-class maps-table))
-      (error "the table ~a specified in maps-table of slot ~a does not exist" maps-table (slot-definition-name slot)))
+      ;; maps table must correspond to a class
+      (unless (and maps-table (find-class maps-table))
+	(error "the table ~a specified in maps-table of slot ~a does not exist" maps-table (slot-definition-name slot)))
 
-    ;; let the respective table know it is being mapped
-    (pushnew slot (slot-value (find-class maps-table) 'mapped-by))
+      ;; let the respective table know it is being mapped
+      (pushnew slot (slot-value (find-class maps-table) 'mapped-by))
 
-    ;; ensure mapping
-    (unless (or maps-column maps-columns)
-      (warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a. All columns without foreign-keys of table ~a will be mapped."
-	    slot-name maps-table)
-      (default-column-map))
+      ;; ensure mapping
+      (unless (or maps-column maps-columns)
+	(warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a. All columns without foreign-keys of table ~a will be mapped."
+	      slot-name maps-table)
+	(default-column-map))
 
-    ;; select statements return type
-    (unless express-as-type
-      (setf (slot-value slot 'express-as-type) maps-table))
+      ;; select statements return type
+      (unless express-as-type
+	(setf (slot-value slot 'express-as-type) maps-table))
 
-    ;; let the respective columns know they are being mapped also
-    (loop for column in (filter-slots-by-type (find-class maps-table) 'column-slot)
+      ;; let the respective columns know they are being mapped also
+      (loop for column in (filter-slots-by-type (find-class maps-table) 'column-slot)
 	 when (map-column-p slot column)
-       do (push slot (slot-value column 'mapped-by)))))
+	 do (push slot (slot-value column 'mapped-by))))))
 
 
 

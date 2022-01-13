@@ -2,13 +2,18 @@
 
 (defpackage :stw.db
   (:use :cl)
+  (:import-from :stw.util
+		:ensure-list
+		:with-gensyms)
   (:import-from :stw.meta
+		:define-base-class
 		:stw-base-layer
 		:base-class
 		:stw-base-class
 		:stw-direct-slot-definition
 		:stw-layer-context
-		:direct-slot-class)
+		:direct-slot-class
+		:filter-slots-by-type)
   (:import-from :contextl
 		:deflayer
 		:define-layered-class
