@@ -11,8 +11,20 @@
 (defclass stw-db-context (stw-layer-context)
   ())
 
+(defclass stw-table (stw-db-context)
+  ((direct-slot-class
+    :initarg :direct-slot-class
+    :initform 'db-column-slot-definition
+    :reader direct-slot-class)))
+
+(defclass stw-interface (stw-db-context)
+  ((direct-slot-class
+    :initarg :direct-slot-class
+    :initform 'db-aggregate-slot-definition
+    :reader direct-slot-class)))
+
 (deflayer stw-db-layer (stw-base-layer)
-  ((direct-slot-class :initform 'stw-column-slot-definition))
+  ()
   (:metaclass stw-db-context))
 
 (define-layered-method
@@ -34,15 +46,9 @@
   (:metaclass stw-db-context))
 
 (deflayer db-table-layer (db-layer)
-  ((direct-slot-class
-    :initarg :direct-slot-class
-    :initform 'db-column-slot-definition
-    :reader direct-slot-class))
-  (:metaclass stw-db-context))
+  ()
+  (:metaclass stw-table))
 
 (deflayer db-interface-layer (db-layer)
-  ((direct-slot-class
-    :initarg :direct-slot-class
-    :initform 'db-aggregate-slot-definition
-    :reader direct-slot-class))
-  (:metaclass stw-db-context))
+  ()
+  (:metaclass stw-interface))
