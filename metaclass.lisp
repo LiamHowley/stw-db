@@ -203,3 +203,19 @@ Set as alist ((COLUMN . VALUE))")))
 		       :on-update (getf foreign-key :on-update))
 		 (slot-value (find-class (getf foreign-key :table)) 'referenced-by)
 		 :test #'equal)))))
+
+
+
+(defvar *schema* "public")
+
+(defmacro define-db-table (name &body body)
+  `(define-base-class ,name
+     :in db-table-layer
+     ,@body
+     (:schema *schema*)))
+
+(defmacro define-interface-node (name &body body)
+  `(define-base-class ,name
+     :in db-interface-layer
+     ,@body
+     (:schema *schema*)))
