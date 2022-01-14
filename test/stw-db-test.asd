@@ -3,5 +3,6 @@
     :depends-on ("stw-db" "parachute")
     :serial t
     :components ((:file "package")
-		 (:file "stw-db"))
+		 (:file "util")
+		 (:file "db"))
     :perform (asdf:test-op (op c) (uiop:symbol-call :parachute :test :stw.db.test)))

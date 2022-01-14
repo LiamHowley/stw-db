@@ -4,9 +4,10 @@
     :description ""
     :serial t
     :components ((:file "package")
+		 (:file "util")
 		 (:file "layers")
 		 (:file "metaclass")
-		 (:file "statements")))
+		 (:file "statements"))
     :long-description
     #.(uiop:read-file-string
        (uiop:subpathname *load-pathname* "README.txt"))
