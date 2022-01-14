@@ -156,23 +156,6 @@ Set as alist ((COLUMN . VALUE))")))
 
 
 
-(defun infill-column (list column)
-  (let ((op (car list)))
-    (when (and (member op '(= > < /= >= <=))
-	       (eql (list-length list) 2))
-      (push column (cdr list)))
-    (labels ((walk (inner acc)
-	       (if (null inner)
-		   (nreverse acc)
-		   (walk (cdr inner)
-			 (typecase (car inner)
-			   (atom
-			    (cons (car inner) acc))
-			   (cons 
-			    (cons (infill-column (car inner) column) acc)))))))
-      (walk list nil))))
-
-
 (defmethod shared-initialize :after ((slot db-column-slot-definition) slot-names
 				     &key col-type table check primary-key return-on foreign-key &allow-other-keys)
   (declare (ignore slot-names))

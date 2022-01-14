@@ -22,6 +22,27 @@
 		:partial-class
 		:partial-class-base-initargs
 		:remove-layer
-		:adjoin-layer-using-class))
+		:adjoin-layer-using-class)
+  (:import-from :closer-mop
+		:slot-definition-name)
+  (:export :define-db-table
+	   :define-interface-node
+
+	   :db-interface-layer
+	   :db-table-layer
+
+	   :db-column-slot-definition
+
+
+	   ;;;; utils
+
+	   ;; syntax
+	   :db-syntax-prep
+	   :sql-op
+	   :set-sql-name
+	   :date/time-p
+
+	   ;; formatting
+	   :infill-column))
 
 (in-package :stw.db)
