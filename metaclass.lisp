@@ -206,7 +206,7 @@ Set as alist ((COLUMN . VALUE))")))
 
 
 
-(defvar *schema* "public")
+(defparameter *schema* "public")
 
 (defmacro define-db-table (name &body body)
   `(define-base-class ,name
