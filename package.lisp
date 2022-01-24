@@ -61,8 +61,6 @@
 	   :db-connect
 	   :connection-pool
 	   :clear-connection-pool
-	   :make-connection
-	   :close-connection
 	   
 	   :db-column-slot-definition
 
