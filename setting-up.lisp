@@ -1,6 +1,5 @@
 (in-package stw.db)
 
-(define-layered-function create-statement (class))
 
 (define-layered-function statement (class))
 
@@ -8,28 +7,30 @@
 
 ;;; create table
 
-(define-layered-method create-statement
-  :in db-interface-layer ((class db-wrap))
-  (loop for table in (slot-value class 'tables)
-     for object = (find-class table)
-     for statement = (with-active-layers (db-table-layer)
-		       (create-statement object))
-     when statement
-     collect statement))
+(define-layered-function create-statement (class)
+  (:documentation "Create table(s) in schema.")
 
+  (:method
+      :in db-interface-layer ((class db-wrap))
+    (loop for table in (slot-value class 'tables)
+	  for object = (find-class table)
+	  for statement = (with-active-layers (db-table-layer)
+			    (create-statement object))
+	  when statement
+	    collect statement))
 
-(define-layered-method create-statement
-  :in db-table-layer ((class db))
-  (with-slots (schema table primary-keys constraints) class
-    (format nil "CREATE TABLE IF NOT EXISTS ~a.~a (~{~a~^, ~}~@[, ~a~]~@[, ~{~a~^, ~}~])" 
-	    schema table
-	    (loop for column in (filter-slots-by-type class 'column-slot)
-	       collect (clause column))
-	    ;; primary keys
-	    (clause (make-primary-key :keys primary-keys))
-	    ;;check constraints
-	    (loop for constraint in constraints
-	       collect (clause (apply #'make-check-constraint :table table constraint))))))
+  (:method
+      :in db-table-layer ((class db))
+    (with-slots (schema table primary-keys constraints) class
+      (format nil "CREATE TABLE IF NOT EXISTS ~a.~a (~{~a~^, ~}~@[, ~a~]~@[, ~{~a~^, ~}~])" 
+	      schema table
+	      (loop for column in (filter-slots-by-type class 'db-column-slot-definition)
+		    collect (clause column))
+	      ;; primary keys
+	      (clause (make-instance 'primary-key :keys primary-keys))
+	      ;;check constraints
+	      (loop for constraint in constraints
+		    collect (clause (apply #'make-instance 'check-constraint :table table constraint)))))))
 
 
 (define-layered-class primary-key
@@ -125,7 +126,7 @@
       :in db-table-layer ((class db))
     (with-slots (schema table foreign-keys) class
       (loop for key in foreign-keys
-	    collect (statement (apply #'make-foreign-key :ref-schema schema :ref-table table key))))))
+	    collect (statement (apply #'make-instance foreign-key :ref-schema schema :ref-table table key))))))
 
 
 (define-layered-method statement
