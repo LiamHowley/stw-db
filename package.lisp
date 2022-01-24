@@ -64,6 +64,15 @@
 	   
 	   :db-column-slot-definition
 
+	   ;;;; statement functions
+	   :create-schema
+	   :set-schema
+	   :set-privileged-user
+
+	   :create-statement
+	   :foreign-keys-statements
+	   :index-statement
+
 	   ;;;; utils
 
 	   ;; syntax
