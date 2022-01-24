@@ -5,6 +5,25 @@
 
 (define-layered-function clause (class))
 
+
+;;; schema
+
+(define-layered-function create-schema (&optional schema)
+  (:method
+      :in db-layer (&optional (schema *schema*))
+    (format nil "CREATE SCHEMA IF NOT EXISTS ~a" schema)))
+
+(define-layered-function set-schema (&optional schema)
+  (:method
+      :in db-layer (&optional (schema *schema*))
+    (format nil "SET search_path TO ~a, public" schema)))
+
+(define-layered-function set-privileged-user (user &optional schema)
+  (:method
+      :in db-layer ((user string) &optional (schema *schema*))
+    (format nil "GRANT ALL PRIVILEGES ON SCHEMA ~a TO ~a" schema user)))
+
+
 ;;; create table
 
 (define-layered-function create-statement (class)
