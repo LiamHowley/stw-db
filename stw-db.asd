@@ -11,7 +11,7 @@
 		 (:file "layers")
 		 (:file "metaclass")
 		 (:file "connect")
-		 (:file "statements"))
+		 (:file "setting-up"))
     :long-description
     #.(uiop:read-file-string
        (uiop:subpathname *load-pathname* "README.txt"))
