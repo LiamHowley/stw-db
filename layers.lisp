@@ -23,27 +23,19 @@
     :initform 'db-aggregate-slot-definition
     :reader direct-slot-class)))
 
-(deflayer stw-db-layer (stw-base-layer)
+(deflayer db-layer (stw-base-layer)
   ()
   (:metaclass stw-db-context))
 
-(define-layered-method
-    adjoin-layer-using-class
-  ((layer stw-db-context) active-layers)
+(define-layered-method adjoin-layer-using-class
+  :in-layer db-layer ((layer stw-layer-context) active-layers)
   ;; on layer activation deactivate other layers of the same layer type
   (values 
-   (call-next-layered-method layer
-    (remove-layer 'stw-db-layer active-layers))
+   (call-next-layered-method
+    layer
+    (remove-layer 'db-layer active-layers))
    t))
 
-
-(deflayer db-layer (stw-db-layer)
-  ((conn
-    :initarg :conn
-    :initform nil
-    :accessor conn
-    :special t))
-  (:metaclass stw-db-context))
 
 (deflayer db-table-layer (db-layer)
   ()

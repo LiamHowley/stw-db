@@ -3,9 +3,14 @@
 (defpackage :stw.db
   (:use :cl)
   (:import-from :stw.util
+		:aif
+		:self
 		:ensure-list
-		:with-gensyms)
+		:explode-string
+		:with-gensyms
+		:ordered-plist-values)
   (:import-from :stw.meta
+		:with-context
 		:define-base-class
 		:stw-base-layer
 		:base-class
@@ -15,8 +20,15 @@
 		:direct-slot-class
 		:filter-slots-by-type)
   (:import-from :contextl
+		:defdynamic
+		:dynamic
+		:dlet
+		:capture-dynamic-environment
+		:with-dynamic-environment
 		:deflayer
+		:with-active-layers
 		:define-layered-class
+		:define-layered-function
 		:define-layered-method
 		:call-next-layered-method
 		:partial-class
@@ -25,14 +37,34 @@
 		:adjoin-layer-using-class)
   (:import-from :closer-mop
 		:slot-definition-name)
+  (:import-from :cl-postgres
+		:database-connection
+		:open-database
+		:database-open-p
+		:close-database
+		:get-postgresql-version)
+  (:import-from :atomics
+		:implementation-not-supported
+		:atomic-pop
+		:atomic-push)
+  (:import-from :bordeaux-threads
+  		:make-lock
+  		:with-lock-held)
   (:export :define-db-table
 	   :define-interface-node
 
 	   :db-interface-layer
 	   :db-table-layer
 
+	   :db-interface
+	   :db-table
+	   :db-connect
+	   :connection-pool
+	   :clear-connection-pool
+	   :make-connection
+	   :close-connection
+	   
 	   :db-column-slot-definition
-
 
 	   ;;;; utils
 

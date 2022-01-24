@@ -1,12 +1,16 @@
 (defsystem "stw-db"
     :depends-on ("stw-meta"
-		 "stw-utils")
+		 "stw-utils"
+		 "cl-postgres"
+		 "bordeaux-threads"
+		 "atomics")
     :description ""
     :serial t
     :components ((:file "package")
 		 (:file "util")
 		 (:file "layers")
 		 (:file "metaclass")
+		 (:file "connect")
 		 (:file "statements"))
     :long-description
     #.(uiop:read-file-string
