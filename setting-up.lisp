@@ -52,7 +52,7 @@
 
 
 (define-layered-method clause
-  :in-layer db-table-layer ((column column-slot))
+  :in-layer db-table-layer ((column db-column-slot-definition))
   (let ((column-name (db-syntax-prep (slot-definition-name column))))
     (with-slots (col-type not-null unique default) column
       (format nil "~(~a~) ~{~a~}"
@@ -169,7 +169,7 @@
   (:method 
       :in-layer db-table-layer ((class db))
     (with-slots (schema table primary-keys) class
-      (loop for slot in (filter-slots-by-type class 'column-slot)
+      (loop for slot in (filter-slots-by-type class 'db-column-slot-definition)
 	    for key = (db-syntax-prep (slot-definition-name slot))
 	    unless (member key primary-keys :test #'equal)
 	      when (or (slot-value slot 'foreign-key)
