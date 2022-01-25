@@ -194,10 +194,10 @@
 	    unless (member key primary-keys :test #'equal)
 	      when (or (slot-value slot 'foreign-key)
 		       (slot-value slot 'index))
-		collect (clause (make-index :schema schema
-					    :table table
-					    :name (format nil "~a_~a_~a_idx" schema table key)
-					    :columns key))))))
+		collect (clause (make-instance 'index :schema schema
+						      :table table
+						      :name (format nil "~a_~a_~a_idx" schema table key)
+						      :columns key))))))
 
 
 (define-layered-method clause
