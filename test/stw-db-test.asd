@@ -1,6 +1,6 @@
 (defsystem #:stw-db-test
     :description "Test suite for stw-db."
-    :depends-on ("stw-db" "parachute")
+    :depends-on ("parachute" "stw-db" "contextl")
     :serial t
     :components ((:file "package")
 		 (:file "util")
