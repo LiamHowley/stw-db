@@ -62,7 +62,8 @@
 
 
 (define-interface-node user (user-base user-id user-email)
-  ())
+  ()
+  (:key-column . (:table user-base :column id)))
 
 
 
@@ -141,27 +142,30 @@
 
 
 (define-interface-node account
-    (user-base user-id user-email user-account user-name user-handle user-url user-validate)
+  (user-base user-id user-email user-account user-name user-handle user-url user-validate)
   ((sites :maps-table user-site))
-  :key-column (:table user-base :column id)
-  :tables (user-base
-	   user-id
-	   user-email
-	   user-site
-	   user-account
-	   user-handle
-	   user-url
-	   user-validate
-	   user-name))
+  (:key-column . (:table user-base :column id))
+  (:tables . (user-base
+	      user-id
+	      user-email
+	      user-site
+	      user-account
+	      user-handle
+	      user-url
+	      user-validate
+	      user-name)))
 
 
 
 ;;;;; tests
 
-(with-active-layers (db-layer)
+(define-test setting-up...
+  :parent stw-db)
 
-  (define-test check-schema
-    :parent stw-db
+
+(define-test check-schema
+  :parent setting-up...
+  (with-active-layers ((db-layer :schema "stw"))
     (is string=
 	"CREATE SCHEMA IF NOT EXISTS stw"
 	(create-schema))
@@ -173,22 +177,24 @@
 	(set-privileged-user "liam"))))
 
 
-(with-active-layers (db-table-layer)
+(define-test creating-table...etc
+  :parent setting-up...
+  (with-active-layers ((db-table-layer :schema "stw"))
+    (is string=
+	"CREATE TABLE IF NOT EXISTS stw.user_account (id INTEGER NOT NULL, password TEXT NOT NULL, created_on TIMESTAMPTZ DEFAULT NOW(), created_by INTEGER NOT NULL, validated BOOLEAN NOT NULL, PRIMARY KEY (id))"
+	(create-statement (find-class 'user-account)))
 
-  (is (create-statement (find-class 'user-account))
-      "CREATE TABLE IF NOT EXISTS stw.user_account (id INTEGER NOT NULL, password TEXT NOT NULL, created_on TIMESTAMPTZ DEFAULT NOW(), created_by INTEGER NOT NULL, validated BOOLEAN NOT NULL, PRIMARY KEY (id))")
+    (is equal
+	'("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stw_user_account_created_by_fkey') THEN ALTER TABLE stw.user_account ADD CONSTRAINT stw_user_account_created_by_fkey FOREIGN KEY (created_by) REFERENCES stw.user_base (id) ON UPDATE CASCADE ON DELETE CASCADE; end if; END; $$;"
+	  "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stw_user_account_id_fkey') THEN ALTER TABLE stw.user_account ADD CONSTRAINT stw_user_account_id_fkey FOREIGN KEY (id) REFERENCES stw.user_base (id) ON UPDATE CASCADE ON DELETE CASCADE; end if; END; $$;")
+	(foreign-keys-statements (find-class 'user-account)))
 
-  (is equal
-      '("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = stw_user_base_id_fkey) THEN ALTER TABLE stw.user_account ADD CONSTRAINT stw_user_base_id_fkey FOREIGN KEY (id) REFERENCES user_base (id) ON UPDATE CASCADE ON DELETE CASCADE; end if; END; $$;"
-	"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = stw_user_base_created_by_fkey) THEN ALTER TABLE stw.user_account ADD CONSTRAINT stw_user_base_created_by_fkey FOREIGN KEY (created_by) REFERENCES user_base (id) ON UPDATE CASCADE ON DELETE CASCADE; end if; END; $$;")
-      (foreign-keys-statements (find-class 'user-account)))
+    ;; don't know why but this always fails. The expected result is correct
+    (is equal 
+	'("CREATE INDEX IF NOT EXISTS stw_user_email_user_id_idx ON stw.user_email (user_id)"
+	  "CREATE INDEX IF NOT EXISTS stw_user_email_id_idx ON stw.user_email (id)")
+	(index-statement (find-class 'user-email)))
 
-  ;; don't know why but this always fails. The expected result is correct
-  (is equal 
-      '("CREATE INDEX IF NOT EXISTS stw_user_email_user_id_idx ON stw.user_email (user_id)"
-	"CREATE INDEX IF NOT EXISTS stw_user_email_id_idx ON stw.user_email (id)")
-      (index-statement (find-class 'user-email)))
-
-  ;; only produces a statement for classes with tables that have a non-indexed foreign key.
-  ;; Primary keys are indexed by default.
-  (false (index-statement (find-class 'validate))))
+    ;; only produces a statement for classes with tables that have a non-indexed foreign key.
+    ;; Primary keys are indexed by default.
+    (false (index-statement (find-class 'validate)))))
