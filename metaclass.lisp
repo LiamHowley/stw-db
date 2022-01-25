@@ -61,7 +61,7 @@ Set as alist ((COLUMN . VALUE))")))
 
 (define-layered-class db
   :in db-table-layer (base-class)
-  ((schema :initarg :schema :reader schema :type string)
+  ((schema :initarg :schema :initform *schema* :reader schema :type string)
    (table :initarg :table :initform nil :reader table :type string)
    (primary-keys :initarg :primary-keys :initform nil :accessor primary-keys :type (null cons))
    (foreign-keys :initarg :foreign-keys :initform nil :accessor foreign-keys :type (null cons))
@@ -206,16 +206,13 @@ Set as alist ((COLUMN . VALUE))")))
 
 
 
-(defparameter *schema* "public")
 
 (defmacro define-db-table (name &body body)
   `(define-base-class ,name
      :in db-table-layer
-     ,@body
-     (:schema *schema*)))
+     ,@body))
 
 (defmacro define-interface-node (name &body body)
   `(define-base-class ,name
      :in db-interface-layer
-     ,@body
-     (:schema *schema*)))
+     ,@body))
