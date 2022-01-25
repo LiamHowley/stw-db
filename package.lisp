@@ -18,7 +18,8 @@
 		:stw-direct-slot-definition
 		:stw-layer-context
 		:direct-slot-class
-		:filter-slots-by-type)
+		:filter-slots-by-type
+		:filter-precedents-by-type)
   (:import-from :contextl
 		:defdynamic
 		:dynamic
@@ -55,6 +56,7 @@
 
 	   :db-interface-layer
 	   :db-table-layer
+	   :db-layer
 
 	   :db-interface
 	   :db-table
@@ -64,11 +66,13 @@
 	   
 	   :db-column-slot-definition
 
-	   ;;;; statement functions
+	   ;;;; schema
+	   :*schema*
 	   :create-schema
 	   :set-schema
 	   :set-privileged-user
 
+	   ;;;; statement functions
 	   :create-statement
 	   :foreign-keys-statements
 	   :index-statement
