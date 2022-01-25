@@ -149,13 +149,6 @@ Set as alist ((COLUMN . VALUE))")))
 
 
 
-(defmethod initialize-instance :after ((class db) &key)
-  (with-slots (table) class
-    (unless table
-      (setf table (db-syntax-prep (class-name class))))))
-
-
-
 (defmethod shared-initialize :after ((slot db-column-slot-definition) slot-names
 				     &key col-type table check primary-key return-on foreign-key &allow-other-keys)
   (declare (ignore slot-names))
@@ -203,6 +196,62 @@ Set as alist ((COLUMN . VALUE))")))
 		       :on-update (getf foreign-key :on-update))
 		 (slot-value (find-class (getf foreign-key :table)) 'referenced-by)
 		 :test #'equal)))))
+
+
+
+
+(defmethod shared-initialize :around ((class db-wrap) slot-names
+				      &key &allow-other-keys)
+  (declare (ignore slot-names))
+  (call-next-method)
+  (with-slots (key-column tables) class
+    (loop for object in (filter-precedents-by-type class 'stw-base-class)
+       for key-column% = (slot-value object 'key-column)
+       for local-tables = (slot-value object 'tables)
+       when key-column%
+       unless key-column
+       do (setf key-column key-column%)
+       when local-tables
+       do (setf tables (nconc tables (set-difference local-tables tables))))
+    (when key-column
+      (let ((table (getf key-column :table)))
+	(unless (find-class table)
+	  (error "Key column is a plist with keys :TABLE and :COLUMN. The assigned table value is not a table."))
+	(unless (getf key-column :column)
+	  (error "There is no column value in the list KEY-COLUMN"))
+	(when tables
+	  (unless (member table tables :test #'eq)
+	    (error "Key column missing from tables")))
+	(setf tables (cons table (remove table tables :test #'eq)))))))
+
+
+
+
+(defmethod shared-initialize :around ((class db) slot-names
+				      &key &allow-other-keys)
+  (declare (ignore slot-names))
+  (call-next-method)
+  (with-slots (primary-keys foreign-keys constraints table) class
+    (unless table
+      (setf table (db-syntax-prep (class-name class))))
+    (loop for column in (filter-slots-by-type class 'db-column-slot-definition)
+	  for slot-name = (slot-definition-name column)
+	  for to-check = nil
+	  do (with-slots (primary-key foreign-key check) column
+	       (when primary-key
+		 (pushnew (db-syntax-prep slot-name) primary-keys :test #'equal))
+	       (when check
+		 (setf (getf to-check :check) (slot-value column 'check)
+		       (getf to-check :col-name) slot-name
+		       (getf to-check :table) table)
+		 (pushnew to-check constraints :test #'equal))
+	       (when foreign-key
+		 (setf (getf foreign-key :key) (db-syntax-prep slot-name))
+		 (unless (getf foreign-key :schema)
+		   (setf (getf foreign-key :schema) (schema (find-class (getf foreign-key :table)))))
+		 (pushnew foreign-key foreign-keys :test #'equal))))
+    (when primary-keys
+      (setf primary-keys (reverse primary-keys)))))
 
 
 
