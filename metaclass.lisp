@@ -118,7 +118,7 @@ Set as alist ((COLUMN . VALUE))")))
     (setf maps-columns
 	  (mapcan #'(lambda (column)
 		      (list (slot-definition-name column)))
-		  (filter-slots-by-type (find-class 'maps-table) 'db-column-slot-definition)))))
+		  (filter-slots-by-type (find-class maps-table) 'db-column-slot-definition)))))
 
 
 
@@ -136,14 +136,14 @@ Set as alist ((COLUMN . VALUE))")))
       (unless (or maps-column maps-columns)
 	(warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a. All columns without foreign-keys of table ~a will be mapped."
 	      slot-name maps-table)
-	(default-column-map))
+	(default-column-map slot))
 
       ;; select statements return type
       (unless express-as-type
 	(setf (slot-value slot 'express-as-type) maps-table))
 
       ;; let the respective columns know they are being mapped also
-      (loop for column in (filter-slots-by-type (find-class maps-table) 'column-slot)
+      (loop for column in (filter-slots-by-type (find-class maps-table) 'db-column-slot-definition)
 	 when (map-column-p slot column)
 	 do (push slot (slot-value column 'mapped-by))))))
 

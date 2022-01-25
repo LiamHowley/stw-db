@@ -145,7 +145,7 @@
       :in db-table-layer ((class db))
     (with-slots (schema table foreign-keys) class
       (loop for key in foreign-keys
-	    collect (statement (apply #'make-instance foreign-key :ref-schema schema :ref-table table key))))))
+	    collect (statement (apply #'make-instance 'foreign-key :ref-schema schema :ref-table table key))))))
 
 
 (define-layered-method statement
