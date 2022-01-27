@@ -13,6 +13,7 @@
 		:with-context
 		:define-base-class
 		:stw-base-layer
+		:serialize
 		:base-class
 		:stw-base-class
 		:stw-direct-slot-definition
@@ -32,6 +33,7 @@
 		:define-layered-function
 		:define-layered-method
 		:call-next-layered-method
+		:singleton-class
 		:partial-class
 		:partial-class-base-initargs
 		:remove-layer
@@ -67,7 +69,6 @@
 	   :db-column-slot-definition
 
 	   ;;;; schema
-	   :*schema*
 	   :create-schema
 	   :set-schema
 	   :set-privileged-user

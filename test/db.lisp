@@ -2,7 +2,12 @@
 
 ;;;; setting up
 
-(setf *schema* "stw")
+
+(defmacro define-db-table (name &body body)
+  `(stw.db:define-db-table ,name
+     ,@body
+     (:schema . ,*schema*)))
+
 
 (define-db-table user-base ()
   ((id :col-type :serial
@@ -142,7 +147,7 @@
 
 
 (define-interface-node account
-  (user-base user-id user-email user-account user-name user-handle user-url user-validate)
+  (user user-account user-name user-handle user-url user-validate)
   ((sites :maps-table user-site))
   (:key-column . (:table user-base :column id))
   (:tables . (user-base
@@ -165,21 +170,21 @@
 
 (define-test check-schema
   :parent setting-up...
-  (with-active-layers ((db-layer :schema "stw"))
+  (with-active-layers (db-layer)
     (is string=
 	"CREATE SCHEMA IF NOT EXISTS stw"
-	(create-schema))
+	(create-schema *schema*))
     (is string=
 	"SET search_path TO stw, public"
-	(set-schema))
+	(set-schema *schema*))
     (is string=
 	"GRANT ALL PRIVILEGES ON SCHEMA stw TO liam"
-	(set-privileged-user "liam"))))
+	(set-privileged-user "liam" *schema*))))
 
 
 (define-test creating-table...etc
   :parent setting-up...
-  (with-active-layers ((db-table-layer :schema "stw"))
+  (with-active-layers (db-table-layer)
     (is string=
 	"CREATE TABLE IF NOT EXISTS stw.user_account (id INTEGER NOT NULL, password TEXT NOT NULL, created_on TIMESTAMPTZ DEFAULT NOW(), created_by INTEGER NOT NULL, validated BOOLEAN NOT NULL, PRIMARY KEY (id))"
 	(create-statement (find-class 'user-account)))

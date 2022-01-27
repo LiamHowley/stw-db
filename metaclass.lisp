@@ -1,6 +1,5 @@
 (in-package stw.db)
 
-(defparameter *schema* "public")
 
 ;;; DB-INTERFACE-LAYER metaclasses
 
@@ -63,7 +62,7 @@ Set as alist ((COLUMN . VALUE))")))
 
 (define-layered-class db
   :in db-table-layer (base-class)
-  ((schema :initarg :schema :initform *schema* :reader schema :type string)
+  ((schema :initarg :schema :initform "public" :reader schema :type string)
    (table :initarg :table :initform nil :reader table :type string)
    (primary-keys :initarg :primary-keys :initform nil :accessor primary-keys :type (null cons))
    (foreign-keys :initarg :foreign-keys :initform nil :accessor foreign-keys :type (null cons))
@@ -249,14 +248,24 @@ Set as alist ((COLUMN . VALUE))")))
       (setf primary-keys (reverse primary-keys)))))
 
 
+(defun serialized-p (supers)
+  (and supers
+       (loop for class in supers
+	       thereis (filter-precedents-by-type class 'singleton-class))))
+
+(defmacro define-db-class (name layer metaclass &body body)
+  (unless (serialized-p (car body))
+    (push 'serialize (car body)))
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     (define-base-class ,name
+       :in ,layer
+       ,@body
+       (:metaclass ,metaclass))))
+
 (defmacro define-db-table (name &body body)
-  `(define-base-class ,name
-     :in db-table-layer
-     ,@body
-     (:metaclass db-table-class)))
+  `(define-db-class ,name db-table-layer db-table-class
+     ,@body))
 
 (defmacro define-interface-node (name &body body)
-  `(define-base-class ,name
-     :in db-interface-layer
-     ,@body
-     (:metaclass db-interface-class)))
+  `(define-db-class ,name db-interface-layer db-interface-class
+     ,@body))

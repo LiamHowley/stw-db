@@ -8,19 +8,19 @@
 
 ;;; schema
 
-(define-layered-function create-schema (&optional schema)
+(define-layered-function create-schema (schema)
   (:method
-      :in db-layer (&optional (schema *schema*))
+      :in db-layer (schema)
     (format nil "CREATE SCHEMA IF NOT EXISTS ~a" schema)))
 
-(define-layered-function set-schema (&optional schema)
+(define-layered-function set-schema (schema)
   (:method
-      :in db-layer (&optional (schema *schema*))
+      :in db-layer (schema)
     (format nil "SET search_path TO ~a, public" schema)))
 
-(define-layered-function set-privileged-user (user &optional schema)
+(define-layered-function set-privileged-user (user schema)
   (:method
-      :in db-layer ((user string) &optional (schema *schema*))
+      :in db-layer ((user string) schema)
     (format nil "GRANT ALL PRIVILEGES ON SCHEMA ~a TO ~a" schema user)))
 
 
