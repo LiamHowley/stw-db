@@ -12,7 +12,8 @@
 		 (:file "metaclass")
 		 (:file "connect")
 		 (:file "setting-up")
-		 (:file "procedure"))
+		 (:file "procedure")
+		 (:file "insert"))
     :long-description
     #.(uiop:read-file-string
        (uiop:subpathname *load-pathname* "README.txt"))
