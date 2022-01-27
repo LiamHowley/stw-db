@@ -1,5 +1,7 @@
 (in-package stw.db)
 
+(defparameter *schema* "public")
+
 ;;; DB-INTERFACE-LAYER metaclasses
 
 (define-layered-class db-wrap
