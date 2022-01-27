@@ -91,11 +91,11 @@ Set as alist ((COLUMN . VALUE))")))
    (column-name :reader column-name)))
 
 
-(define-layered-class stw-base-class
- :in-layer db-interface-layer (partial-class db-wrap) ())
+(define-layered-class db-interface-class
+ :in-layer db-interface-layer (stw-base-class db-wrap) ())
 
-(define-layered-class stw-base-class
- :in-layer db-table-layer (partial-class db) ())
+(define-layered-class db-table-class
+ :in-layer db-table-layer (stw-base-class db) ())
 
 
 
@@ -206,13 +206,7 @@ Set as alist ((COLUMN . VALUE))")))
   (call-next-method)
   (with-slots (key-column tables) class
     (loop for object in (filter-precedents-by-type class 'stw-base-class)
-       for key-column% = (slot-value object 'key-column)
-       for local-tables = (slot-value object 'tables)
-       when key-column%
-       unless key-column
-       do (setf key-column key-column%)
-       when local-tables
-       do (setf tables (nconc tables (set-difference local-tables tables))))
+	  do (pushnew (class-name object) tables :test #'eq))
     (when key-column
       (let ((table (getf key-column :table)))
 	(unless (find-class table)
@@ -223,7 +217,6 @@ Set as alist ((COLUMN . VALUE))")))
 	  (unless (member table tables :test #'eq)
 	    (error "Key column missing from tables")))
 	(setf tables (cons table (remove table tables :test #'eq)))))))
-
 
 
 
@@ -254,14 +247,14 @@ Set as alist ((COLUMN . VALUE))")))
       (setf primary-keys (reverse primary-keys)))))
 
 
-
-
 (defmacro define-db-table (name &body body)
   `(define-base-class ,name
      :in db-table-layer
-     ,@body))
+     ,@body
+     (:metaclass db-table-class)))
 
 (defmacro define-interface-node (name &body body)
   `(define-base-class ,name
      :in db-interface-layer
-     ,@body))
+     ,@body
+     (:metaclass db-interface-class)))
