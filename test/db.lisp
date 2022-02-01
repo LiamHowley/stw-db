@@ -68,7 +68,7 @@
 
 (define-interface-node user (user-base user-id user-email)
   ()
-  (:key-column . (:table user-base :column id)))
+  (:key-columns . ((:table user-base :column id))))
 
 
 
@@ -149,16 +149,7 @@
 (define-interface-node account
   (user user-account user-name user-handle user-url user-validate)
   ((sites :maps-table user-site))
-  (:key-column . (:table user-base :column id))
-  (:tables . (user-base
-	      user-id
-	      user-email
-	      user-site
-	      user-account
-	      user-handle
-	      user-url
-	      user-validate
-	      user-name)))
+  (:key-columns . ((:table user-base :column id))))
 
 
 

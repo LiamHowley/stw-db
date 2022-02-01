@@ -9,16 +9,22 @@
     :initarg :tables
     :initform nil
     :accessor tables)
-   (key-column
-    :initarg :key-column
+   (key-columns
+    :initarg :key-columns
     :initform nil
-    :documentation "Slot of equal value between two instances of the same class. Anchor for updating queries. Typically referenced by multiple columns."
-    :reader key-column))
+    :documentation "Slots of equal value between two instances of the same class. Anchor for updating queries. Typically referenced by multiple columns, and is not updated. E.g. an ID column."
+    :reader key-columns)
+   (foreign-keys
+    :initarg :foreign-keys
+    :initform nil
+    :documentation "All foreign keys in interface node. Require referenced table and referenced column for each key."
+    :accessor foreign-keys
+    :type (null cons)))
   (:documentation "Aggregate tables for transactions, cte's, etc. Map to application objects."))
 
 
 (defmethod partial-class-base-initargs append ((class db-wrap))
-  '(:tables :key-column))
+  '(:tables :key-columns))
 
 (defclass db-base-column-definition
   (stw-direct-slot-definition)
@@ -71,7 +77,8 @@ Set as alist ((COLUMN . VALUE))")))
    (foreign-keys :initarg :foreign-keys :initform nil :accessor foreign-keys :type (null cons))
    (referenced-by :initarg :referenced-by :initform nil :accessor referenced-by :type (cons null))
    (constraints :initarg :constraints :initform nil :reader constraints :type (null cons))
-   (mapped-by :initform nil :reader mapped-by :type (null cons))))
+   (mapped-by :initform nil :reader mapped-by :type (null cons))
+   (value-columns :initform nil :type (null string) :reader value-columns)))
 
 
 (defmethod partial-class-base-initargs append ((class db))
@@ -88,7 +95,7 @@ Set as alist ((COLUMN . VALUE))")))
    (check :initarg :check :initform nil :type (null cons))
    (default :initarg :default :initform nil)
    (index :initarg :index :initform nil :reader index :type boolean)
-   (not-null :initarg :not-null :initform nil :type boolean)
+   (not-null :initarg :not-null :initform nil :type boolean :reader not-null-p)
    (return-on :initarg :return-on :initform nil :type (cons keyword))
    (value :initarg :value :initform nil)
    (mapped-by :initform nil :reader mapped-by)
@@ -112,9 +119,9 @@ Set as alist ((COLUMN . VALUE))")))
 				(slot-definition-name slot))
 			    (slot-value column 'mapped-by))
 		    :test #'eq)
-      (let ((column-name (slot-definition-name column)))
-	(or (eq column-name maps-column)
-	    (member column-name maps-columns))))))
+      (let ((name (slot-definition-name column)))
+	(or (eq name maps-column)
+	    (member name maps-columns))))))
 
 
 (defmethod default-column-map ((slot db-aggregate-slot-definition))
@@ -161,6 +168,7 @@ Set as alist ((COLUMN . VALUE))")))
     (when primary-key
       (unless (eq col-type 'serial)
 	(setf (slot-value slot 'not-null) t)))
+
     (when check
       (setf (slot-value slot 'check)
 	    (infill-column check slot-name)))
@@ -222,6 +230,18 @@ Set as alist ((COLUMN . VALUE))")))
 	    (error "Key column missing from tables")))
 	(setf tables (cons table (remove table tables :test #'eq)))))))
 
+    (when key-columns
+      (loop
+	for key-column in key-columns
+	do (let ((table (getf key-column :table)))
+	     (unless (find-class table)
+	       (error "Key column is a plist with keys :TABLE and :COLUMN. The assigned table value is not a table."))
+	     (unless (getf key-column :column)
+	       (error "There is no column value in the list ~a" key-column))
+	     (when tables
+	       (unless (member table tables :test #'eq)
+		 (error "Key column missing from tables")))
+	     (setf tables (cons table (remove table tables :test #'eq))))))))
 
 
 (defmethod shared-initialize :around ((class db) slot-names
