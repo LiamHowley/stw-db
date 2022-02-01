@@ -20,8 +20,11 @@
 (defmethod partial-class-base-initargs append ((class db-wrap))
   '(:tables :key-column))
 
+(defclass db-base-column-definition
+  (stw-direct-slot-definition)
+  ())
 
-(defclass db-aggregate-slot-definition (stw-direct-slot-definition)
+(defclass db-aggregate-slot-definition (db-base-column-definition)
     ((maps-table
       :initarg :maps-table
       :initform (error "Value required for maps-table")
@@ -75,7 +78,7 @@ Set as alist ((COLUMN . VALUE))")))
   '(:schema :table :primary-keys :foreign-keys :referenced-by :constraints))
 
 
-(defclass db-column-slot-definition (stw-direct-slot-definition)
+(defclass db-column-slot-definition (db-base-column-definition)
   ((schema :initform nil :type string)
    (table :initarg :table :initform nil :type symbol)
    (col-type :initarg :col-type :initform :text :reader col-type :type keyword)
