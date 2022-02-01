@@ -4,6 +4,7 @@
   (:use :cl)
   (:import-from :stw.util
 		:aif
+		:awhen
 		:self
 		:ensure-list
 		:explode-string
@@ -20,7 +21,8 @@
 		:stw-layer-context
 		:direct-slot-class
 		:filter-slots-by-type
-		:filter-precedents-by-type)
+		:filter-precedents-by-type
+		:object-to-plist)
   (:import-from :contextl
 		:defdynamic
 		:dynamic
