@@ -93,3 +93,13 @@
 			    (cons (infill-column (car inner) column) acc)))))))
       (walk list nil))))
 
+
+(defun prepare-value (col-type value)
+  (case col-type
+    (:boolean
+     (if (eq value t) "'t'" "'f'"))
+    ((:text :varchar)
+     (concatenate 'string "'" value "'"))
+    (t
+     value)))
+      
