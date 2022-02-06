@@ -12,7 +12,7 @@
 (define-db-table user-base ()
   ((id :col-type :serial
        :primary-key t
-       :return-on (:insert))))
+       :referenced t)))
 
 
 (define-db-table user-account ()
@@ -40,7 +40,7 @@
 (define-db-table user-id ()
   ((user-id :col-type :serial
 	    :primary-key t
-	    :return-on (:insert))
+	    :referenced t)
    (id :col-type :integer
        :not-null t
        :foreign-key (:table user-base
@@ -120,7 +120,7 @@
 (define-db-table validate ()
   ((vkey :col-type :serial
 	 :primary-key t
-	 :return-on :insert)
+	 :referenced t)
    (token :col-type :text
 	  :not-null t)
    (expires_on :col-type :timestamp

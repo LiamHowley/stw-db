@@ -76,6 +76,7 @@ Set as alist ((COLUMN . VALUE))")))
    (primary-keys :initarg :primary-keys :initform nil :accessor primary-keys :type (null cons))
    (foreign-keys :initarg :foreign-keys :initform nil :accessor foreign-keys :type (null cons))
    (referenced-by :initarg :referenced-by :initform nil :accessor referenced-by :type (cons null))
+   (referenced-columns :initarg :referenced-columns :initform nil :accessor referenced-columns :type (cons null))
    (constraints :initarg :constraints :initform nil :reader constraints :type (null cons))
    (mapped-by :initform nil :reader mapped-by :type (null cons))
    (value-columns :initform nil :type (null string) :reader value-columns)))
@@ -96,7 +97,7 @@ Set as alist ((COLUMN . VALUE))")))
    (default :initarg :default :initform nil)
    (index :initarg :index :initform nil :reader index :type boolean)
    (not-null :initarg :not-null :initform nil :type boolean :reader not-null-p)
-   (return-on :initarg :return-on :initform nil :type (cons keyword))
+   (referenced :initarg :referenced :initform nil :type boolean)
    (value :initarg :value :initform nil)
    (mapped-by :initform nil :reader mapped-by)
    (column-name :reader column-name)))
@@ -161,7 +162,7 @@ Set as alist ((COLUMN . VALUE))")))
 
 
 (defmethod shared-initialize :after ((slot db-column-slot-definition) slot-names
-				     &key col-type table check primary-key return-on foreign-key &allow-other-keys)
+				     &key col-type table check primary-key referenced foreign-key &allow-other-keys)
   (declare (ignore slot-names))
   (let ((slot-name (slot-definition-name slot)))
 
@@ -173,11 +174,7 @@ Set as alist ((COLUMN . VALUE))")))
       (setf (slot-value slot 'check)
 	    (infill-column check slot-name)))
 
-    (flet ((test-return-on (on)
-	     (unless (member on '(:insert :update :delete))
-	       (error "Return-on must satisfy a condition of :INSERT :UPDATE or :DELETE")))
-
-	   (test-foreign-key (key)
+    (flet ((test-foreign-key (key)
 	     (unless (and (getf key :table)
 			  (getf key :column))
 	       (error "Foreign key plist must contain both :TABLE and :COLUMN params"))
@@ -192,11 +189,6 @@ Set as alist ((COLUMN . VALUE))")))
 		     (on-delete (getf key :delete)))
 		 (on-action on-update)
 		 (on-action on-delete)))))
-
-      (when return-on
-	(typecase return-on
-	  (atom (test-return-on return-on))
-	  (cons (map nil #'test-return-on return-on))))
 
       (when foreign-key
 	(test-foreign-key foreign-key)))))
