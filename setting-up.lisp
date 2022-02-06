@@ -83,11 +83,15 @@
 	       (if (eq unique t) " UNIQUE" "")
 	       (typecase default
 		 (cons
-		  (format nil " DEFAULT ~a()" (car default)))
+		  (format nil " DEFAULT ~a(~@[~{~a~^, ~}~])" (car default) (cdr default)))
 		 (integer
 		  (format nil " DEFAULT ~a" default))
 		 (string
 		  (format nil " DEFAULT '~a'" default))
+		 (boolean
+		  (if (eq col-type :boolean)
+		      (format nil " DEFAULT '~a'" (if (eq default t) "t" "f"))
+		      ""))
 		 (t "")))))))
 
 
@@ -149,10 +153,10 @@
 
 
 (define-layered-method statement
-    :in-layer db-table-layer ((statement foreign-key))
-    (with-slots (schema key ref-schema ref-table table column on-update on-delete) statement
-      (let ((constraint (format nil "~a_~a_~a_fkey" schema ref-table key)))
-	(format nil "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '~a') THEN ALTER TABLE ~a.~a ADD CONSTRAINT ~a FOREIGN KEY (~a) REFERENCES ~a (~a)~@[ ON UPDATE ~a~]~@[ ON DELETE ~a~]; end if; END; $$;" constraint ref-schema ref-table constraint key table column on-update on-delete))))
+  :in-layer db-table-layer ((statement foreign-key))
+  (with-slots (schema key ref-schema ref-table table column on-update on-delete) statement
+    (let ((constraint (format nil "~a_~a_~a_fkey" schema ref-table key)))
+      (format nil "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '~a') THEN ALTER TABLE ~a.~a ADD CONSTRAINT ~a FOREIGN KEY (~a) REFERENCES ~a (~a)~@[ ON UPDATE ~a~]~@[ ON DELETE ~a~]; end if; END; $$;" constraint ref-schema ref-table constraint key table column on-update on-delete))))
 
 
 
