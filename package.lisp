@@ -9,6 +9,7 @@
 		:ensure-list
 		:explode-string
 		:with-gensyms
+		:map-tree-depth-first
 		:ordered-plist-values)
   (:import-from :stw.meta
 		:with-context
@@ -41,7 +42,8 @@
 		:remove-layer
 		:adjoin-layer-using-class)
   (:import-from :closer-mop
-		:slot-definition-name)
+		:slot-definition-name
+		:slot-definition-initargs)
   (:import-from :cl-postgres
 		:database-connection
 		:open-database
@@ -52,10 +54,13 @@
 		:implementation-not-supported
 		:atomic-pop
 		:atomic-push)
+  (:import-from :fare-memoization
+		:memoized-funcall)
   (:import-from :bordeaux-threads
   		:make-lock
   		:with-lock-held)
   (:export :define-db-table
+	   :define-key-table
 	   :define-interface-node
 
 	   :db-interface-layer
@@ -68,7 +73,9 @@
 	   :connection-pool
 	   :clear-connection-pool
 	   
+	   :db-base-column-definition
 	   :db-column-slot-definition
+	   :db-aggregate-slot-definition
 
 	   ;;;; schema
 	   :create-schema
