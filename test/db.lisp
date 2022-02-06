@@ -39,7 +39,7 @@
 				    :on-update :cascade
 				    :no-join t))
    (validated :col-type :boolean
-	      :not-null t)))
+	      :default nil)))
 
 
 (define-db-table user-id ()
@@ -47,7 +47,6 @@
 	    :primary-key t
 	    :referenced t)
    (id :col-type :integer
-       :not-null t
        :foreign-key (:table user-base
 			    :column id
 			    :on-delete :cascade
@@ -56,6 +55,7 @@
 
 (define-db-table user-email ()
   ((email :col-type :text
+	  :not-null t
 	  :primary-key t)
    (user-id :col-type :integer
 	    :not-null t
@@ -98,11 +98,13 @@
 			    :on-delete :cascade
 			    :on-update :cascade))
    (site :primary-key t
+	 :not-null t
 	 :col-type :text)))
 
 
 (define-db-table user-handle ()
   ((handle :col-type :text
+	   :not-null t
 	   :primary-key t)
    (id :col-type :integer
        :primary-key t
@@ -113,7 +115,8 @@
 
 
 (define-db-table user-url ()
-  ((url :col-type :text :primary-key t)
+  ((url :col-type :text
+	:primary-key t)
    (id :col-type :integer
        :primary-key t
        :foreign-key (:table user-base
@@ -128,8 +131,7 @@
 	 :referenced t)
    (token :col-type :text
 	  :not-null t)
-   (expires_on :col-type :timestamp
-	       :not-null t)))
+   (expires-on :col-type :timestamp)))
 
 
 (define-db-table user-validate ()
