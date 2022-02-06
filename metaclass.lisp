@@ -79,7 +79,7 @@ Set as alist ((COLUMN . VALUE))")))
    (referenced-columns :initarg :referenced-columns :initform nil :accessor referenced-columns :type (cons null))
    (constraints :initarg :constraints :initform nil :reader constraints :type (null cons))
    (mapped-by :initform nil :reader mapped-by :type (null cons))
-   (value-columns :initform nil :type (null string) :reader value-columns)))
+   (require-columns :initform nil :type (null string) :reader require-columns)))
 
 
 (defmethod partial-class-base-initargs append ((class db))
