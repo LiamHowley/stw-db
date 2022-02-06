@@ -154,7 +154,7 @@
 
 
 (define-interface-node account
-  (user user-account user-name user-handle user-url user-validate)
+  (user user-account user-name user-handle user-url)
   ((sites :maps-table user-site))
   (:key-columns . ((:table user-base :column id))))
 
@@ -184,7 +184,7 @@
   :parent setting-up...
   (with-active-layers (db-table-layer)
     (is string=
-	"CREATE TABLE IF NOT EXISTS stw.user_account (id INTEGER NOT NULL, password TEXT NOT NULL, created_on TIMESTAMPTZ DEFAULT NOW(), created_by INTEGER NOT NULL, validated BOOLEAN NOT NULL, PRIMARY KEY (id))"
+	"CREATE TABLE IF NOT EXISTS stw.user_account (id INTEGER NOT NULL, password TEXT NOT NULL, created_on TIMESTAMPTZ DEFAULT NOW(), created_by INTEGER NOT NULL, validated BOOLEAN DEFAULT 'f', PRIMARY KEY (id))"
 	(create-statement (find-class 'user-account)))
 
     (is equal

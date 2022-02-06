@@ -15,5 +15,5 @@
       (infill-column '(or (and (> 3) (< 5)) (and (> 10) (< 13))) 'id)
       '(OR (AND (> ID 3) (< ID 5)) (AND (> ID 10) (< ID 13))))
   (is equal
-      (infill-column '(or (and (> 3 different-column) (< 5 and-another)) (and (> 10) (< 13))) 'id)
-      '(OR (AND (> 3 DIFFERENT-COLUMN) (< 5 AND-ANOTHER)) (AND (> ID 10) (< ID 13)))))
+      (infill-column '(or (and (> 3 foo) (< 5 bar)) (and (> 10) (< 13))) 'id)
+      '(OR (AND (> 3 FOO) (< 5 BAR)) (AND (> ID 10) (< ID 13)))))
