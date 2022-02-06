@@ -3,8 +3,10 @@
 	:parachute
 	:stw.db)
   (:import-from :contextl
-		:with-active-layers)
-  (:shadow :define-db-table)
+   :with-active-layers)
+  (:shadow
+   :define-db-table
+   :define-key-table)
   (:export :stw-db))
 
 (in-package stw.db.test)

@@ -109,6 +109,13 @@ Set as alist ((COLUMN . VALUE))")))
 (define-layered-class db-table-class
  :in-layer db-table-layer (stw-base-class db) ())
 
+(define-layered-class db-key-table
+  :in-layer db-table-layer (db-table-class)
+  ()
+  (:documentation "Specialised type for tables 
+with a single column of type serial."))
+
+
 
 
 ;;;;;;; Initialization Methods
@@ -332,6 +339,11 @@ Set as alist ((COLUMN . VALUE))")))
        :in ,layer
        ,@body
        (:metaclass ,metaclass))))
+
+
+(defmacro define-key-table (name &body body)
+  `(define-db-class ,name db-table-layer db-key-table
+	 ,@body))
 
 (defmacro define-db-table (name &body body)
   `(define-db-class ,name db-table-layer db-table-class

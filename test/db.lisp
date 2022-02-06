@@ -8,8 +8,13 @@
      ,@body
      (:schema . ,*schema*)))
 
+(defmacro define-key-table (name &body body)
+  `(stw.db:define-key-table ,name
+     ,@body
+     (:schema . ,*schema*)))
 
-(define-db-table user-base ()
+
+(define-key-table user-base ()
   ((id :col-type :serial
        :primary-key t
        :referenced t)))
