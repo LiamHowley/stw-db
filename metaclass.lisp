@@ -203,27 +203,27 @@ with a single column of type serial."))
 
 
 
-(defun sort-foreign-keys (f-key-table backtrace-table)
-  (let ((sorted-keys))
-    (loop
-      until (eql (hash-table-count backtrace-table) 0)
-      do (maphash #'(lambda (key values)
-		      (let ((match))
-			(typecase values
-			  (cons
-			   (loop
-			     for value in values
-			     when (gethash value backtrace-table)
-			       do (setf (gethash key backtrace-table) value)
-			       and do (setf match t)))
-			  (symbol
-			   (when (gethash values backtrace-table)
-			     (setf match t))))
-			(unless match
-			  (push (gethash key f-key-table) sorted-keys)
-			  (remhash key backtrace-table))))
-		  backtrace-table))
-    sorted-keys))
+(defun sort-tables (tables backtrace-table)
+  (loop
+    until (eql (hash-table-count backtrace-table) 0)
+    do (maphash #'(lambda (key values)
+		    (let ((match))
+		      (typecase values
+			(cons
+			 (loop
+			   for value in values
+			   when (gethash value backtrace-table)
+			     do (setf (gethash key backtrace-table) value)
+			     and do (setf match t)))
+			(symbol
+			 (when (gethash values backtrace-table)
+			   (setf match t))))
+		      (unless match
+			(setf tables (remove key tables :test #'eq))
+			(push key tables)
+			(remhash key backtrace-table))))
+		backtrace-table))
+  tables)
 
 
 (defmethod shared-initialize :around ((class db-wrap) slot-names
@@ -236,8 +236,7 @@ with a single column of type serial."))
     ;; into the nodes foreign-key slot. Backtrace-table and f-key-table
     ;; are used for sorting foreign keys based on mutual dependencies.
 
-    (let ((backtrace-table (make-hash-table :test #'eq))
-	  (f-key-table (make-hash-table :test #'eq)))
+    (let ((backtrace-table (make-hash-table :test #'eq)))
       (loop
 	for object in (filter-precedents-by-type class 'stw-base-class)
 
@@ -245,19 +244,17 @@ with a single column of type serial."))
 	when (typep object 'db-table-class)
 	  do (pushnew (class-name object) tables :test #'eq)
 
-	     ;; collate foreign-keys and sort
+	     ;; collate foreign-keys and sort tables
 	  and do (loop
 		   for key in (slot-value object 'foreign-keys)
 		   for f-ref = (getf key :table)
 		   for f-key = (list :table f-ref
 				     :column (getf key :column))
-		   unless (gethash f-ref f-key-table)
-		     do (setf (gethash f-ref f-key-table) f-key)
 		   if (gethash f-ref backtrace-table)
 		     do (pushnew (class-name object) (gethash f-ref backtrace-table))
 		   else
 		     do (setf (gethash f-ref backtrace-table) (list (class-name object)))))
-      (setf foreign-keys (sort-foreign-keys f-key-table backtrace-table)))
+      (setf tables (sort-tables tables backtrace-table)))
 
     (when key-columns
       (loop
@@ -277,53 +274,50 @@ with a single column of type serial."))
 				      &key &allow-other-keys)
   (declare (ignore slot-names))
   (call-next-method)
-  (with-slots (schema primary-keys foreign-keys constraints table value-columns) class
+  (with-slots (schema primary-keys foreign-keys constraints table referenced-columns require-columns) class
     (unless table
       (setf table (db-syntax-prep (class-name class))))
-    (let ((no-foreign-keys))
-      (loop for column in (filter-slots-by-type class 'db-column-slot-definition)
-	    for slot-name = (slot-definition-name column)
-	    for to-check = nil
+    (loop for column in (filter-slots-by-type class 'db-column-slot-definition)
+	  for slot-name = (slot-definition-name column)
+	  for to-check = nil
 
-	    ;; primary key 
-	    do (with-slots (primary-key column-name foreign-key col-type) column
-		 (setf column-name (db-syntax-prep slot-name)
-		       (slot-value column 'table) table)
-		 (when primary-key
-		   (pushnew column-name primary-keys :test #'string=))
+	  ;; primary key 
+	  do (with-slots (primary-key column-name foreign-key col-type referenced check) column
+	       (setf column-name (db-syntax-prep slot-name)
+		     (slot-value column 'table) table)
+	       (when primary-key
+		 (pushnew column-name primary-keys :test #'string=))
+	       (when referenced
+		 (pushnew (list column-name col-type) referenced-columns :test #'equal))
 
-		 ;;foreign-key and value-columns
-		 (cond (foreign-key
-			(setf (getf foreign-key :key) column-name)
-			(unless (getf foreign-key :schema)
-			  (setf (getf foreign-key :schema) (schema (find-class (getf foreign-key :table)))))
-			(pushnew foreign-key foreign-keys :test #'equal)
-			(pushnew (list :key slot-name
-				       :table (class-name class)
-				       :schema (getf foreign-key :schema)
-				       :references (getf foreign-key :column)
-				       :on-delete (getf foreign-key :on-delete)
-				       :on-update (getf foreign-key :on-update))
-				 (slot-value (find-class (getf foreign-key :table)) 'referenced-by)
-				 :test #'equal))
-		       (t
-			(unless (or (eq col-type :serial)
-				    (eq col-type :timestamptz))
-			  (push (list (db-syntax-prep slot-name) col-type) no-foreign-keys)))))
-
+	       ;;foreign-key and require-columns
+	       (cond (foreign-key
+		      (setf (getf foreign-key :key) column-name)
+		      (unless (getf foreign-key :schema)
+			(setf (getf foreign-key :schema) (schema (find-class (getf foreign-key :table)))))
+		      (pushnew foreign-key foreign-keys :test #'equal)
+		      (pushnew (list :key slot-name
+				     :table (class-name class)
+				     :schema (getf foreign-key :schema)
+				     :references (getf foreign-key :column)
+				     :on-delete (getf foreign-key :on-delete)
+				     :on-update (getf foreign-key :on-update))
+			       (slot-value (find-class (getf foreign-key :table)) 'referenced-by)
+			       :test #'equal))
+		     (t
+		      (unless (or (eq col-type :serial)
+				  (eq col-type :timestamptz))
+			(pushnew column require-columns :test #'eq))))
 	       ;; check constraints
-	    do (with-slots (check) column
-		 (when check
-		   (setf (getf to-check :check) (slot-value column 'check)
-			 (getf to-check :col-name) slot-name
-			 (getf to-check :table) table)
-		   (pushnew to-check constraints :test #'equal))))
+	       (when check
+		 (setf (getf to-check :check) check
+		       (getf to-check :col-name) slot-name
+		       (getf to-check :table) table)
+		 (pushnew to-check constraints :test #'equal))))
 
       ;; finish
-      (awhen no-foreign-keys
-	(setf value-columns (nreverse self)))
       (awhen primary-keys
-	(setf primary-keys (nreverse self))))))
+	(setf primary-keys (nreverse self)))))
 
 
 (defun serialized-p (supers)
