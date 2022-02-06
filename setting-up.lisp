@@ -208,20 +208,17 @@
 
 ;;; create type
 
-(define-layered-function create-type (class)
+(define-layered-function create-pg-composite (class)
   (:documentation "Creating an explicit type associated with a class, 
 allows the values to be expressed as an array within the arglist of a
 procedure. It is a simple matter then of calling unnest, using a positional
 parameter to reference the array.")
   (:method
-      :in db-table-layer ((class db)) 
-    (with-slots (table value-columns) class
-    (format nil "CREATE TYPE ~a_type AS (~{~{~a ~a~}~^, ~});" table value-columns))))
-
-
-(define-layered-function make-array-control (class)
-  (:method
-      :in db-table-layer ((class db))
-    (with-slots (table) class
-      (format nil "ARRAY[~~{(~~{~~a~~^, ~~})~~^, ~~}]::~a_type"
-	      (db-syntax-prep table)))))
+      :in db-table-layer ((class db-table-class)) 
+    (with-slots (schema table require-columns) class
+      (let ((table-name (set-sql-name schema table)))
+	(format nil "CREATE TYPE ~a_type AS (~{~{~a ~a~}~^, ~});"
+		table-name (mapcar #'(lambda (column)
+				       (list (column-name column)
+					     (col-type column)))
+				   require-columns))))))
