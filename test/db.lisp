@@ -202,3 +202,54 @@
     ;; only produces a statement for classes with tables that have a non-indexed foreign key.
     ;; Primary keys are indexed by default.
     (false (index-statement (find-class 'validate)))))
+
+
+
+(defvar *account*)
+
+(define-test inserting...
+  :parent stw-db 
+  (let ((*account* (make-instance 'account :name "liam" :email "foo@bar.com"
+					   :password "asdfasdf" :url "jaggedc.com"
+					   :created-by 1 :validated t)))
+    (with-active-layers (db-interface-layer)
+
+      (is equal
+	  `(user-base user-id user-email user-url user-name user-account)
+	  (stw.db::include-tables *account*))
+      (true (stw.db::slot-to-go *account* (stw.meta:find-slot-definition (find-class 'user-email) 'email)))
+      (false (stw.db::slot-to-go *account* (stw.meta:find-slot-definition (find-class 'user-handle) 'handle)))
+
+      (setf (slot-value *account* 'handle) "foo"
+	    (slot-value *account* 'email) nil)
+
+      (is equal
+	  `(user-base user-id user-url user-handle user-name user-account)
+	  (stw.db::include-tables *account*))
+      (false (stw.db::slot-to-go *account* (stw.meta:find-slot-definition (find-class 'user-email) 'email)))
+      (true (stw.db::slot-to-go *account* (stw.meta:find-slot-definition (find-class 'user-handle) 'handle)))
+
+      (let ((format-components (stw.db::sql-typed-array (find-class 'user-account))))
+	(is string= "ARRAY[(~a, ~a, ~a)]::stw.user_account_type[]" (car format-components))
+	(is eql 3 (length (cadr format-components)))
+	(loop
+	  for slot in (cadr format-components)
+	  do (of-type 'db-column-slot-definition slot))
+	(is string= "ARRAY[('t', 1, 'asdfasdf')]::stw.user_account_type[]"
+	    (stw.db::process-values *account* format-components (slot-value (find-class 'user-account) 'stw.db::mapped-by))))
+
+      (setf (slot-value *account* 'email) "foo@bar.com")
+
+      (let ((format-components (stw.db::sql-typed-array (find-class 'user-email))))
+	(is string= "ARRAY[(~a)]::stw.user_email_type[]" (car format-components))
+	(is eql 1 (length (cadr format-components)))
+	(of-type 'db-column-slot-definition (caadr format-components))
+	(is string= "ARRAY[('(foo@bar.com)')]::stw.user_email_type[]"
+	    (stw.db::process-values *account* format-components (slot-value (find-class 'user-email) 'stw.db::mapped-by))))
+	  
+      (let ((format-components (stw.db::sql-typed-array (find-class 'user-site))))
+	(is string= "ARRAY[~{(~a)~^, ~}]::stw.user_site_type[]" (car format-components))
+
+	(setf (slot-value *account* 'sites) '("foo.com" "bar.com" "baz.com"))
+	(is string= "ARRAY[('(foo.com)'), ('(bar.com)'), ('(baz.com)')]::stw.user_site_type[]"
+	    (stw.db::process-values *account* format-components (slot-value (find-class 'user-site) 'stw.db::mapped-by)))))))

@@ -6,6 +6,7 @@
 		:aif
 		:awhen
 		:self
+		:scase
 		:ensure-list
 		:explode-string
 		:with-gensyms
@@ -21,6 +22,7 @@
 		:stw-direct-slot-definition
 		:stw-layer-context
 		:direct-slot-class
+		:find-slot-definition
 		:filter-slots-by-type
 		:filter-precedents-by-type
 		:object-to-plist)
@@ -49,13 +51,17 @@
 		:open-database
 		:database-open-p
 		:close-database
-		:get-postgresql-version)
+		:exec-query
+		:get-postgresql-version
+		:database-error
+		:database-error-code)
   (:import-from :atomics
 		:implementation-not-supported
 		:atomic-pop
 		:atomic-push)
   (:import-from :fare-memoization
-		:memoized-funcall)
+		:memoize
+		:unmemoize)
   (:import-from :bordeaux-threads
   		:make-lock
   		:with-lock-held)
