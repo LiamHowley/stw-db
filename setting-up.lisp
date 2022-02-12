@@ -41,7 +41,7 @@
   (:method
       :in db-table-layer ((class db-table-class))
     (with-slots (schema table primary-keys constraints) class
-      (format nil "CREATE TABLE IF NOT EXISTS ~a.~a (~{~a~^, ~}~@[, ~a~]~@[, ~{~a~^, ~}~])" 
+      (format nil "CREATE TABLE IF NOT EXISTS ~a.~a (~{~a~^, ~}~@[, ~a~]~@[, ~{~a~^, ~}~]);" 
 	      schema table
 	      (loop for column in (filter-slots-by-type class 'db-column-slot-definition)
 		    collect (clause column))
@@ -156,7 +156,7 @@
   :in-layer db-table-layer ((statement foreign-key))
   (with-slots (schema key ref-schema ref-table table column on-update on-delete) statement
     (let ((constraint (format nil "~a_~a_~a_fkey" schema ref-table key)))
-      (format nil "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '~a') THEN ALTER TABLE ~a.~a ADD CONSTRAINT ~a FOREIGN KEY (~a) REFERENCES ~a (~a)~@[ ON UPDATE ~a~]~@[ ON DELETE ~a~]; end if; END; $$;" constraint ref-schema ref-table constraint key table column on-update on-delete))))
+      (format nil "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '~a') THEN ALTER TABLE ~a.~a ADD CONSTRAINT ~a FOREIGN KEY (~a) REFERENCES ~a (~a)~@[ ON UPDATE ~a~]~@[ ON DELETE ~a~]; end if;" constraint ref-schema ref-table constraint key table column on-update on-delete))))
 
 
 
@@ -207,10 +207,11 @@
 (define-layered-method clause
   :in-layer db-table-layer ((clause index))
   (with-slots (schema table name columns) clause
-    (format nil "CREATE INDEX IF NOT EXISTS~@[ ~a~] ON ~a.~a (~{~a~^, ~})" name schema table (ensure-list columns))))
+    (format nil "CREATE INDEX IF NOT EXISTS~@[ ~a~] ON ~a.~a (~{~a~^, ~});" name schema table (ensure-list columns))))
 
 
 ;;; create type
+
 
 (define-layered-function create-pg-composite (class)
   (:documentation "Creating an explicit type associated with a class, 
@@ -221,8 +222,7 @@ parameter to reference the array.")
       :in db-table-layer ((class db-table-class)) 
     (with-slots (schema table require-columns) class
       (let ((table-name (set-sql-name schema table)))
-	(format nil "CREATE TYPE ~a_type AS (~{~{~a ~a~}~^, ~});"
-		table-name (mapcar #'(lambda (column)
+	(format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a_type') THEN CREATE TYPE ~a_type AS (~{~{~a ~a~}~^, ~}); END IF;" (db-syntax-prep table) table-name (mapcar #'(lambda (column)
 				       (list (column-name column)
 					     (col-type column)))
 				   require-columns))))))
