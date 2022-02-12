@@ -3,7 +3,8 @@
 
 (define-layered-class procedure
   :in db-layer ()
-  ((name :initarg :name :accessor name)
+  ((schema :initarg :schema :accessor schema)
+   (name :initarg :name :accessor name)
    (args :initarg :args :initform nil :accessor args)
    (p-values :initarg :values :initform nil :accessor p-values)
    (vars :initarg :vars :initform nil :accessor vars)
@@ -13,10 +14,10 @@
 
 (define-layered-method statement
   :in-layer db-interface-layer ((class procedure))
-  (with-slots (name args vars sql-list sql-statement) class
+  (with-slots (schema name args vars sql-list sql-statement) class
     (setf sql-statement
 	  (format nil "CREATE OR REPLACE PROCEDURE ~a (~a)~%LANGUAGE plpgsql~%AS $BODY$~%~a~%BEGIN~%~a~%END;~%$BODY$;"
-		  name 
+		  (set-sql-name schema name)
 		  (format nil "~@[~{~{~a~@[ ~a~]~}~^, ~}~]" args)
 		  (format nil "~@[~%~{~{DECLARE ~a ~a~@[ := ~a~];~}~%~}~]" vars)
 		  (format nil "~{~a~^~%~}" sql-list)))
@@ -34,7 +35,7 @@
 (define-layered-function sql-typed-array (class)
   (:method
       :in db-layer ((class db-table-class))
-    (with-slots (schema table require-columns) class
+    (with-slots (schema table require-columns mapped-by) class
       (let ((table-name (set-sql-name schema table))
 	    (slots))
 	(list 

@@ -5,7 +5,10 @@
 
 (define-layered-class db-wrap
   :in db-interface-layer (base-class)
-  ((tables
+  ((schema
+    :initarg :schema
+    :reader schema)
+   (tables
     :initarg :tables
     :initform nil
     :accessor tables)
