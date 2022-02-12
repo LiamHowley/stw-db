@@ -19,7 +19,7 @@
 	  (format nil "CREATE OR REPLACE PROCEDURE ~a (~a)~%LANGUAGE plpgsql~%AS $BODY$~%~a~%BEGIN~%~a~%END;~%$BODY$;"
 		  (set-sql-name schema name)
 		  (format nil "~@[~{~{~a~@[ ~a~]~}~^, ~}~]" args)
-		  (format nil "~@[~%~{~{DECLARE ~a ~a~@[ := ~a~];~}~%~}~]" vars)
+		  (format nil "~@[DECLARE~%~{~{~a ~a~@[ := ~a~];~}~%~}~]" vars)
 		  (format nil "~{~a~^~%~}" sql-list)))
     class))
 
@@ -37,15 +37,13 @@
       :in db-layer ((class db-table-class))
     (with-slots (schema table require-columns mapped-by) class
       (let ((table-name (set-sql-name schema table))
-	    (slots))
+	    (control (if mapped-by
+			 "ARRAY[~~{(~{~a~^, ~})~~^, ~~}]::~a_type[]"
+			 "ARRAY[(~{~a~^, ~})]::~a_type[]")))
 	(list 
-	 (format nil "ARRAY[(~{~a~^, ~})]::~a_type"
-		 (loop for slot in require-columns
-		       collect slot into slots%
-		       collect "~a" into values
-		       finally (setf slots slots%)
-			       (return values))
+	 (format nil control
+		 (loop
+		   for slot in require-columns
+		     collect "~a")
 		 table-name)
-	 slots)))))
-
-	  ;;(format nil "ARRAY[~{(~{~a~^, ~})~^, ~}]::~a_type"
+	 require-columns)))))
