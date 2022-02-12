@@ -178,7 +178,7 @@
 	(set-schema *schema*))
     (is string=
 	"GRANT ALL PRIVILEGES ON SCHEMA stw TO liam"
-	(set-privileged-user "liam" *schema*))))
+	(set-privileged-user *schema* "liam"))))
 
 
 (define-test creating-table...etc

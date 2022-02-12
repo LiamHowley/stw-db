@@ -11,17 +11,17 @@
 (define-layered-function create-schema (schema)
   (:method
       :in db-layer (schema)
-    (format nil "CREATE SCHEMA IF NOT EXISTS ~a" schema)))
+    (format nil "CREATE SCHEMA IF NOT EXISTS ~(~a~)" schema)))
 
 (define-layered-function set-schema (schema)
   (:method
       :in db-layer (schema)
-    (format nil "SET search_path TO ~a, public" schema)))
+    (format nil "SET search_path TO ~(~a~), public" schema)))
 
-(define-layered-function set-privileged-user (user schema)
+(define-layered-function set-privileged-user (schema user)
   (:method
-      :in db-layer ((user string) schema)
-    (format nil "GRANT ALL PRIVILEGES ON SCHEMA ~a TO ~a" schema user)))
+      :in db-layer (schema (user string))
+    (format nil "GRANT ALL PRIVILEGES ON SCHEMA ~(~a~) TO ~a" schema user)))
 
 
 ;;; create table
