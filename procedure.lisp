@@ -23,6 +23,13 @@
 		  (format nil "~{~a~^~%~}" sql-list)))
     class))
 
+(define-layered-function call-statement (class)
+  (:method 
+    :in-layer db-interface-layer ((class procedure))
+  (with-slots (schema name p-values) class
+    (format nil "CALL ~a.~a (~@[~{~a~^, ~}~])" schema name p-values))))
+
+
 (defstruct component
   (sql nil :type string)
   (declarations () :type list)
