@@ -19,7 +19,10 @@
     :initform nil
     :documentation "All foreign keys in interface node. Require referenced table and referenced column for each key."
     :accessor foreign-keys
-    :type (null cons)))
+    :type (null cons))
+   (maps
+    :initform nil
+    :type list))
   (:documentation "Aggregate tables for transactions, cte's, etc. Map to application objects."))
 
 
@@ -31,38 +34,28 @@
   ())
 
 (defclass db-aggregate-slot-definition (db-base-column-definition)
-    ((maps-table
-      :initarg :maps-table
-      :initform (error "Value required for maps-table")
-      :type symbol)
-     (maps-column
-      :initarg :maps-column
-      :initform nil
-      :type (null symbol)
-      :documentation "if neither MAPS-COLUMNS nor MAPS-COLUMN is specified, all columns are mapped.")
-     (maps-columns
-      :initarg :maps-columns
-      :initform nil
-      :type (null cons)
-      :documentation "if neither MAPS-COLUMNS nor MAPS-COLUMN is specified, all columns are mapped.")
-     (express-as-type
-      :initarg :express-as-type
-      :initform nil
-      :type (null symbol)
-      :documentation "Set requested type for SELECT operations to return. Unless otherwise specified, the type
+  ((maps
+    :initarg :maps-table
+    :initarg :maps-column
+    :initarg :maps-columns)
+   (express-as-type
+    :initarg :express-as-type
+    :initform nil
+    :type (null symbol)
+    :documentation "Set requested type for SELECT operations to return. Unless otherwise specified, the type
 set in maps-table will be returned.")
-     (constraint
-      :initarg :constraint
-      :initform nil
-      :type (null cons)
-      :documentation "similar to SET-MAPPED-DEFAULTS constraint references other columns in a
+   (constraint
+    :initarg :constraint
+    :initform nil
+    :type (null cons)
+    :documentation "similar to SET-MAPPED-DEFAULTS constraint references other columns in a
 mapped table. However, CONSTRAINT requires a form, other than a list, e.g. (string= \"value\") or 
 (> 3). Multiple constraints can be set in the form so that a constraint could reference a number greater than
 and less than. The list will be walked, using INFIX-LIST, setting the appropriate operand and column name")
-     (set-mapped-defaults
-      :initarg :set-mapped-defaults
-      :initform nil :type (null cons)
-      :documentation "when mapping a column, other columns from the same table may have a fixed value. 
+   (set-mapped-defaults
+    :initarg :set-mapped-defaults
+    :initform nil :type (null cons)
+    :documentation "when mapping a column, other columns from the same table may have a fixed value. 
 Set as alist ((COLUMN . VALUE))")))
 
 
@@ -120,51 +113,48 @@ with a single column of type serial."))
 
 ;;;;;;; Initialization Methods
 
-(defmethod map-column-p ((slot db-aggregate-slot-definition) (column db-column-slot-definition))
-  (with-slots (maps-column maps-columns) slot
-    (unless (member (slot-definition-name slot)
-		    (mapcar #'(lambda (slot)
-				(slot-definition-name slot))
-			    (slot-value column 'mapped-by))
-		    :test #'eq)
-      (let ((name (slot-definition-name column)))
-	(or (eq name maps-column)
-	    (member name maps-columns))))))
+(defstruct (slot-mapping (:conc-name nil))
+  (mapping-node nil :type db-interface-class)
+  (mapping-slot nil :type db-aggregate-slot-definition)
+  (mapped-table nil :type db-table-class)
+  (mapped-column nil :type db-column-slot-definition)
+  (mapped-columns () :type list))
 
 
-(defmethod default-column-map ((slot db-aggregate-slot-definition))
-  (with-slots (maps-columns maps-table) slot
-    (setf maps-columns
-	  (mapcan #'(lambda (column)
-		      (list (slot-definition-name column)))
-		  (filter-slots-by-type (find-class maps-table) 'db-column-slot-definition)))))
+(defmethod map-column-p ((column db-column-slot-definition) maps-column maps-columns)
+  (unless (member slot (slot-value column 'mapped-by) :test #'eq)
+    (let ((name (slot-definition-name column)))
+      (or (eq name maps-column)
+	  (member name maps-columns)))))
+
+
+(defmethod default-column-map ((slot db-aggregate-slot-definition) maps-table maps-columns)
+  (with-slots (maps) slot
+    (setf maps
+	  (list :maps-table maps-table
+		:maps-columns (mapcan #'(lambda (column)
+					  (list column))
+				      (filter-slots-by-type (find-class maps-table) 'db-column-slot-definition))))))
 
 
 
-(defmethod initialize-instance :after ((slot db-aggregate-slot-definition) &key)
-  (with-slots (maps-table maps-columns maps-column express-as-type) slot
+(defmethod initialize-instance :after ((slot db-aggregate-slot-definition) &key maps-table maps-column maps-columns)
+  (with-slots (maps express-as-type) slot
     (let ((slot-name (slot-definition-name slot)))
       ;; maps table must correspond to a class
       (unless (and maps-table (find-class maps-table))
 	(error "the table ~a specified in maps-table of slot ~a does not exist" maps-table (slot-definition-name slot)))
 
-      ;; let the respective table know it is being mapped
-      (pushnew slot (slot-value (find-class maps-table) 'mapped-by))
-
       ;; ensure mapping
       (unless (or maps-column maps-columns)
 	(warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a. All columns without foreign-keys of table ~a will be mapped."
 	      slot-name maps-table)
-	(default-column-map slot))
+	(default-column-map slot maps-table maps-columns))
 
-      ;; select statements return type
+	(setf maps (list maps-table maps-columns maps-column))
+
       (unless express-as-type
-	(setf (slot-value slot 'express-as-type) maps-table))
-
-      ;; let the respective columns know they are being mapped also
-      (loop for column in (filter-slots-by-type (find-class maps-table) 'db-column-slot-definition)
-	 when (map-column-p slot column)
-	 do (push slot (slot-value column 'mapped-by))))))
+	(setf (slot-value slot 'express-as-type) maps-table)))))
 
 
 
@@ -235,27 +225,55 @@ with a single column of type serial."))
     ;; read relevant precedents into tables and each tables foreign-keys
     ;; into the nodes foreign-key slot. Backtrace-table and f-key-table
     ;; are used for sorting foreign keys based on mutual dependencies.
-
     (let ((backtrace-table (make-hash-table :test #'eq)))
-      (loop
-	for object in (filter-precedents-by-type class 'stw-base-class)
+      (flet ((collate-keys (table-class)
+	       (loop
+		 for key in (slot-value table-class 'foreign-keys)
+		 for f-ref = (getf key :table)
+		 for f-key = (list :table f-ref
+				   :column (getf key :column))
+		 if (gethash f-ref backtrace-table)
+		   do (pushnew (class-name table-class) (gethash f-ref backtrace-table))
+		 else
+		   do (setf (gethash f-ref backtrace-table) (list (class-name table-class))))))
+	(loop
+	  for object in (filter-precedents-by-type class 'stw-base-class)
 
-	;; set tables
-	when (typep object 'db-table-class)
-	  do (pushnew (class-name object) tables :test #'eq)
+	  ;; set schema and tables and collate foreign-keys
+	  unless (slot-boundp class 'schema)
+	    do (setf (slot-value class 'schema) (slot-value object 'schema))
+	  when (typep object 'db-table-class)
+	    do (pushnew (class-name object) tables :test #'eq)
+	    and do (collate-keys object))
 
-	     ;; collate foreign-keys and sort tables
-	  and do (loop
-		   for key in (slot-value object 'foreign-keys)
-		   for f-ref = (getf key :table)
-		   for f-key = (list :table f-ref
-				     :column (getf key :column))
-		   if (gethash f-ref backtrace-table)
-		     do (pushnew (class-name object) (gethash f-ref backtrace-table))
-		   else
-		     do (setf (gethash f-ref backtrace-table) (list (class-name object)))))
+	;; add tables mapped by aggregator slots and update
+	;; mappings to reflect class and slot definitions.
+	(loop
+	  for slot in (filter-slots-by-type class 'db-aggregate-slot-definition)
+	  do (with-slots (maps) slot
+	       (when (consp maps)
+		 (destructuring-bind (maps-table maps-columns maps-column) maps
+		   (pushnew maps-table tables :test #'eq)
+		   (setf maps-table (find-class maps-table)
+			 maps-column (when maps-column
+				       (find-slot-definition maps-table maps-column 'db-column-slot-definition))
+			 maps-columns (loop for column in maps-columns
+					    collect (find-slot-definition maps-table column 'db-column-slot-definition)))
+		   (collate-keys maps-table)
+
+		   ;; let the respective table and column know it is being mapped and by whom
+		   (let ((column-map (make-slot-mapping :mapping-node class
+							:mapping-slot slot
+							:mapped-table maps-table
+							:mapped-column maps-column
+							:mapped-columns maps-columns)))
+		     (pushnew column-map (slot-value class 'maps) :test #'eq)
+		     (pushnew column-map (slot-value maps-column 'mapped-by) :test #'eq)
+		     (pushnew column-map (slot-value maps-table 'mapped-by) :test #'eq)
+		     (setf maps column-map)))))))
+
+      ;; now sort the tables
       (setf tables (sort-tables tables backtrace-table)))
-
     (when key-columns
       (loop
 	for key-column in key-columns

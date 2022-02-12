@@ -155,7 +155,8 @@
 
 (define-interface-node account
   (user user-account user-name user-handle user-url)
-  ((sites :maps-table user-site))
+  ((sites :maps-table user-site
+	  :maps-column site))
   (:key-columns . ((:table user-base :column id))))
 
 
