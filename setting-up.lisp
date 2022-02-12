@@ -219,6 +219,19 @@
 allows the values to be expressed as an array within the arglist of a
 procedure. It is a simple matter then of calling unnest, using a positional
 parameter to reference the array.")
+
+  (:method
+      :in db-interface-layer ((class db-interface-class))
+    (with-slots (tables) class
+      (loop
+	for table in tables
+	for required = (require-columns (find-class table))
+	for composite = (when required
+			  (with-active-layers (db-table-layer)
+			    (create-pg-composite (find-class table))))
+	when composite
+	  collect composite)))
+
   (:method
       :in db-table-layer ((class db-table-class)) 
     (with-slots (schema table require-columns) class
