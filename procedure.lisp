@@ -22,6 +22,13 @@
 		  (format nil "~{~a~^~%~}" sql-list)))
     class))
 
+(defstruct component
+  (sql nil :type string)
+  (declarations () :type list)
+  (params)
+  (param-controls))
+
+
 ;;; pg composite arrays - used in passing values to insert procedure calls
 
 (define-layered-function sql-typed-array (class)

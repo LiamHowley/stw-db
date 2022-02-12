@@ -106,10 +106,10 @@ their respective values or nil.")
 	     (var (list (format nil "_~a_~a" (db-syntax-prep table) column) (col-type slot) nil)))
 	(values
 	 (class-name class)
-	 (list 
-	  (format nil "INSERT INTO ~a DEFAULT VALUES RETURNING ~a INTO ~a;"
-		  table-name column (car var))
-	  (list var))))))
+	 (make-component 
+	  :sql (format nil "INSERT INTO ~a DEFAULT VALUES RETURNING ~a INTO ~a;"
+		       table-name column (car var))
+	  :declarations (list var))))))
 
 
   (:method :in-layer db-table-layer ((class db-table-class))
@@ -140,23 +140,29 @@ their respective values or nil.")
 				 (t
 				  (push reference declared-vars)))))))
 	     (foreign-keys class))
-	;; Returning values: The class-name of table and a list of
-	;; 1. statement, 2. variables that need to be declared and
-	;; 3. the name of argument array that needs to be set.
+	;; Returning values: The class-name of table and a structure object
+	;; of type component, containing:
+	;; 1. statement,
+	;; 2. variables that need to be declared and
+	;; 3. the pg reference for the argument array that needs to be set.
+	;; 4. a control string to build the argument array.
 	(values
 	 (class-name class)
-	 (list 
-	  (format nil
-		  "INSERT INTO ~a (~{~a~^, ~}) ~a~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
-		  (set-sql-name schema table)
-		  columns
-		  (if vars
-		      (format nil "SELECT ~{~a~^, ~} FROM UNNEST ($~~a)" vars)
-		      (format nil "VALUES (~{~a~^, ~})" declared-vars))
-		  (mapcar #'car referenced-columns)
-		  (mapcar #'car into))
-	  into
-	  (when vars
-	    (list
-	     (format nil "~a_type[]" (set-sql-name schema table))
-	     nil))))))))
+	 (make-component 
+	  :sql (format nil
+		       "INSERT INTO ~a (~{~a~^, ~}) ~a~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
+		       (set-sql-name schema table)
+		       columns
+		       (if vars
+			   (format nil "SELECT ~{~a~^, ~} FROM UNNEST ($~~a)" vars)
+			   (format nil "VALUES (~{~a~^, ~})" declared-vars))
+		       (mapcar #'car referenced-columns)
+		       (mapcar #'car into))
+	  :declarations into
+	  :params (when vars
+		    (list (format nil "~a_type[]" (set-sql-name schema table)) nil))
+	  :param-controls (when vars
+			    (sql-typed-array class))))))))
+
+
+(memoize 'insert-components :table *components*)
