@@ -39,7 +39,7 @@
 	    collect statement))
 
   (:method
-      :in db-table-layer ((class db))
+      :in db-table-layer ((class db-table-class))
     (with-slots (schema table primary-keys constraints) class
       (format nil "CREATE TABLE IF NOT EXISTS ~a.~a (~{~a~^, ~}~@[, ~a~]~@[, ~{~a~^, ~}~])" 
 	      schema table
@@ -135,7 +135,7 @@
 (define-layered-function foreign-keys-statements (class)
 
   (:method 
-      :in db-interface-layer ((class db-wrap))
+      :in db-interface-layer ((class db-interface-class))
     (with-slots (tables) class
       (let ((collated-keys))
 	(loop for table in tables
@@ -146,7 +146,7 @@
 	collated-keys)))
 
   (:method
-      :in db-table-layer ((class db))
+      :in db-table-layer ((class db-table-class))
     (with-slots (schema table foreign-keys) class
       (loop for key in foreign-keys
 	    collect (statement (apply #'make-instance 'foreign-key :ref-schema schema :ref-table table key))))))
@@ -173,7 +173,7 @@
 (define-layered-function index-statement (class)
 
   (:method 
-      :in-layer db-interface-layer ((class db-wrap))
+      :in-layer db-interface-layer ((class db-interface-class))
     (labels ((to-index (tables acc)
 	       (if (null tables)
 		   acc
@@ -191,7 +191,7 @@
 
 
   (:method 
-      :in-layer db-table-layer ((class db))
+      :in-layer db-table-layer ((class db-table-class))
     (with-slots (schema table primary-keys) class
       (loop for slot in (filter-slots-by-type class 'db-column-slot-definition)
 	    for key = (db-syntax-prep (slot-definition-name slot))
