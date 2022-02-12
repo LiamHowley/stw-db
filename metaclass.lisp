@@ -313,6 +313,8 @@ with a single column of type serial."))
 
 	       ;;foreign-key and require-columns
 	       (cond (foreign-key
+		      (when (getf foreign-key :no-join)
+			(pushnew column require-columns :test #'eq))
 		      (setf (getf foreign-key :key) column-name)
 		      (unless (getf foreign-key :schema)
 			(setf (getf foreign-key :schema) (schema (find-class (getf foreign-key :table)))))
