@@ -30,13 +30,14 @@
   (:documentation "Create table(s) in schema.")
 
   (:method
-      :in db-interface-layer ((class db-wrap))
-    (loop for table in (slot-value class 'tables)
-	  for object = (find-class table)
-	  for statement = (with-active-layers (db-table-layer)
-			    (create-statement object))
-	  when statement
-	    collect statement))
+      :in db-interface-layer ((class db-interface-class))
+    (loop
+      for table in (slot-value class 'tables)
+      for object = (find-class table)
+      for statement = (with-active-layers (db-table-layer)
+			(create-statement object))
+      when statement
+	collect statement))
 
   (:method
       :in db-table-layer ((class db-table-class))
