@@ -94,12 +94,13 @@
       (walk list nil))))
 
 
-(defun prepare-value (col-type value)
+(defun prepare-value (col-type value &optional parenthesize)
   (case col-type
     (:boolean
      (if (eq value t) "'t'" "'f'"))
     ((:text :varchar)
-     (concatenate 'string "'" value "'"))
+     (if parenthesize
+	 (concatenate 'string "'(" value ")'")
+	 (concatenate 'string "'" value "'")))
     (t
      value)))
-      
