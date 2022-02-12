@@ -240,3 +240,24 @@ parameter to reference the array.")
 				       (list (column-name column)
 					     (col-type column)))
 				   require-columns))))))
+    
+
+;;; setting up
+
+(define-layered-function build-db-component (class name &rest function-list)
+  (:documentation "Builds database components required by class")
+
+  (:method
+      :in db-interface-layer ((class db-interface-class) (name string) &rest function-list)
+    (let ((procedure (make-instance 'procedure
+				    :schema (slot-value class 'schema)
+				    :name name)))
+      (setf (slot-value procedure 'sql-list)
+	    (reduce #'(lambda (a b)
+			(nconc a b))
+		    (mapcan #'(lambda (fn)
+				(list (funcall fn class)))
+			    function-list)))
+      (values
+       (sql-statement (statement procedure))
+       procedure))))
