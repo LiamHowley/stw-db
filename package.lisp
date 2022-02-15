@@ -21,7 +21,7 @@
 		:stw-base-class
 		:stw-direct-slot-definition
 		:stw-layer-context
-		:direct-slot-class
+		:slot-definition-class
 		:find-slot-definition
 		:filter-slots-by-type
 		:filter-precedents-by-type

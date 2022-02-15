@@ -12,16 +12,10 @@
   ())
 
 (defclass stw-table (stw-db-context)
-  ((direct-slot-class
-    :initarg :direct-slot-class
-    :initform 'db-column-slot-definition
-    :reader direct-slot-class)))
+  ())
 
 (defclass stw-interface (stw-db-context)
-  ((direct-slot-class
-    :initarg :direct-slot-class
-    :initform 'db-aggregate-slot-definition
-    :reader direct-slot-class)))
+  ())
 
 (deflayer db-layer (stw-base-layer)
   ()

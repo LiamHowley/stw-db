@@ -61,6 +61,8 @@ and less than. The list will be walked, using INFIX-LIST, setting the appropriat
     :documentation "when mapping a column, other columns from the same table may have a fixed value. 
 Set as alist ((COLUMN . VALUE))")))
 
+(defmethod slot-definition-class ((class stw-interface))
+  'db-aggregate-slot-definition)
 
 
 ;;; DB-TABLE-LAYER metaclasses
@@ -98,6 +100,8 @@ Set as alist ((COLUMN . VALUE))")))
    (mapped-by :initform nil :reader mapped-by)
    (column-name :reader column-name)))
 
+(defmethod slot-definition-class ((class stw-table))
+  'db-column-slot-definition)
 
 (define-layered-class db-interface-class
  :in-layer db-interface-layer (stw-base-class db-wrap) ())
