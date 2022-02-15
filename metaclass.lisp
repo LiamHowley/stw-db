@@ -145,9 +145,13 @@ with a single column of type serial."))
 
 
 
-(defmethod initialize-instance :after ((slot db-aggregate-slot-definition) &key maps-table maps-column maps-columns)
+(define-layered-method initialize-in-context
+  :in db-interface-layer ((slot db-aggregate-slot-definition) slot-names
+			  &key maps-table maps-column maps-columns)
+  (declare (ignore slot-names))
   (with-slots (maps express-as-type) slot
     (let ((slot-name (slot-definition-name slot)))
+
       ;; maps table must correspond to a class
       (unless (and maps-table (find-class maps-table))
 	(error "the table ~a specified in maps-table of slot ~a does not exist" maps-table (slot-definition-name slot)))
@@ -165,8 +169,13 @@ with a single column of type serial."))
 
 
 
-(defmethod shared-initialize :after ((slot db-column-slot-definition) slot-names
-				     &key col-type table check primary-key referenced foreign-key &allow-other-keys)
+;;(defmethod shared-initialize :after ((slot db-column-slot-definition) slot-names
+;;				     &key col-type table check primary-key referenced foreign-key &allow-other-keys)
+;;  (declare (ignore slot-names))
+
+(define-layered-method initialize-in-context
+  :in db-table-layer ((slot db-column-slot-definition) slot-names
+		      &key col-type table check primary-key referenced foreign-key &allow-other-keys)
   (declare (ignore slot-names))
   (let ((slot-name (slot-definition-name slot)))
 
@@ -223,10 +232,9 @@ with a single column of type serial."))
   tables)
 
 
-(defmethod shared-initialize :around ((class db-wrap) slot-names
-				      &key &allow-other-keys)
+(define-layered-method initialize-in-context
+  :in db-interface-layer ((class db-wrap) slot-names &key &allow-other-keys)
   (declare (ignore slot-names))
-  (call-next-method)
   (with-slots (key-columns foreign-keys tables) class
 
     ;; read relevant precedents into tables and each tables foreign-keys
@@ -295,10 +303,9 @@ with a single column of type serial."))
 	     (setf tables (cons table (remove table tables :test #'eq))))))))
 
 
-(defmethod shared-initialize :around ((class db) slot-names
-				      &key &allow-other-keys)
+(define-layered-method initialize-in-context
+  :in db-table-layer ((class db) slot-names &key &allow-other-keys)
   (declare (ignore slot-names))
-  (call-next-method)
   (with-slots (schema primary-keys foreign-keys constraints table referenced-columns require-columns) class
     (unless table
       (setf table (db-syntax-prep (class-name class))))

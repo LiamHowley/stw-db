@@ -22,6 +22,7 @@
 		:stw-direct-slot-definition
 		:stw-layer-context
 		:slot-definition-class
+		:initialize-in-context
 		:find-slot-definition
 		:filter-slots-by-type
 		:filter-precedents-by-type
