@@ -19,6 +19,9 @@
 		       (exec-query *db* statement)
 		       (exec-query *db* (call-statement procedure)))
 		     (insert class)))
+	      ;; in theory at least this should be safe from infinitely recursive
+	      ;; loops as the dispatch statement and procedure are both generated
+	      ;; by reference to the same object.
 	      (scase (database-error-code err)
 		     ("3F000"
 		      ;; MISSING SCHEMA
