@@ -152,17 +152,18 @@ with a single column of type serial."))
   (with-slots (maps express-as-type) slot
     (let ((slot-name (slot-definition-name slot)))
 
-      ;; maps table must correspond to a class
-      (unless (and maps-table (find-class maps-table))
-	(error "the table ~a specified in maps-table of slot ~a does not exist" maps-table (slot-definition-name slot)))
+      (when maps-table
+	;; maps table must correspond to a class
+	(unless (find-class maps-table)
+	  (error "the table ~a specified in maps-table of slot ~a does not exist" maps-table (slot-definition-name slot)))
 
-      ;; ensure mapping
-      (unless (or maps-column maps-columns)
-	(warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a. All columns without foreign-keys of table ~a will be mapped."
-	      slot-name maps-table)
-	(default-column-map slot maps-table maps-columns))
+	;; ensure mapping
+	(unless (or maps-column maps-columns)
+	  (warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a. All columns without foreign-keys of table ~a will be mapped."
+		slot-name maps-table)
+	  (default-column-map slot maps-table maps-columns))
 
-	(setf maps (list maps-table maps-columns maps-column))
+	(setf maps (list maps-table maps-columns maps-column)))
 
       (unless express-as-type
 	(setf (slot-value slot 'express-as-type) maps-table)))))
