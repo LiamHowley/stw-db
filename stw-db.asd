@@ -13,6 +13,7 @@
 		 (:file "metaclass")
 		 (:file "connect")
 		 (:file "setting-up")
+		 (:file "tearing-down")
 		 (:file "procedure")
 		 (:file "insert"))
     :long-description
