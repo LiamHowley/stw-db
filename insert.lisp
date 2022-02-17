@@ -238,10 +238,9 @@ with the key value pair, class-name => COMPONENT. Results are cached.")
 				nil))
 			   referenced-columns)))
 	(map nil #'(lambda (f-key)
-		     (destructuring-bind (&key schema key table column no-join &allow-other-keys) f-key
-		       (declare (ignore schema))
+		     (with-slots (key table column no-join) f-key
 		       (unless no-join
-			 (push key columns)
+			 (push (db-syntax-prep key) columns)
 			 (let ((reference (format nil "_~a_~a"
 						  (db-syntax-prep table)
 						  (db-syntax-prep column))))

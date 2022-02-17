@@ -159,8 +159,7 @@ with a single column of type serial."))
 
 	;; ensure mapping
 	(unless (or maps-column maps-columns)
-	  (warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a. All columns without foreign-keys of table ~a will be mapped."
-		slot-name maps-table)
+	  (warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a. All columns without foreign-keys of table ~a will be mapped." slot-name maps-table)
 	  (default-column-map slot maps-table maps-columns))
 
 	(setf maps (list maps-table maps-columns maps-column)))
@@ -245,13 +244,12 @@ with a single column of type serial."))
       (flet ((collate-keys (table-class)
 	       (loop
 		 for key in (slot-value table-class 'foreign-keys)
-		 for f-ref = (getf key :table)
-		 for f-key = (list :table f-ref
-				   :column (getf key :column))
-		 if (gethash f-ref backtrace-table)
-		   do (pushnew (class-name table-class) (gethash f-ref backtrace-table))
-		 else
-		   do (setf (gethash f-ref backtrace-table) (list (class-name table-class))))))
+		 do (with-slots (table column) key
+		      (let ((f-key (list :table table
+					 :column column)))
+			(if (gethash table backtrace-table)
+			    (pushnew (class-name table-class) (gethash table backtrace-table))
+			    (setf (gethash table backtrace-table) (list (class-name table-class)))))))))
 	(loop
 	  for object in (filter-precedents-by-type class 'stw-base-class)
 
@@ -304,20 +302,33 @@ with a single column of type serial."))
 	     (setf tables (cons table (remove table tables :test #'eq))))))))
 
 
+(define-layered-class foreign-key
+  :in-layer db-table-layer ()
+  ((key :initarg :key :initform nil :reader key)
+   (ref-schema :initarg :ref-schema :initform nil :reader ref-schema)
+   (ref-table :initarg :ref-table :initform nil :reader ref-table)
+   (table :initarg :table :initform nil :reader table)
+   (schema :initarg :schema :initform nil :reader schema)
+   (column :initarg :column :initform nil :reader column)
+   (on-update :initarg :on-update :initform nil :reader on-update)
+   (on-delete :initarg :on-delete :initform nil :reader on-delete)
+   (no-join :initarg :no-join :initform nil :reader no-join)))
+
+
 (define-layered-method initialize-in-context
   :in db-table-layer ((class db) slot-names &key &allow-other-keys)
   (declare (ignore slot-names))
   (with-slots (schema primary-keys foreign-keys constraints table referenced-columns require-columns) class
     (unless table
       (setf table (db-syntax-prep (class-name class))))
-    (loop for column in (filter-slots-by-type class 'db-column-slot-definition)
-	  for slot-name = (slot-definition-name column)
+    (loop for slot in (filter-slots-by-type class 'db-column-slot-definition)
+	  for slot-name = (slot-definition-name slot)
 	  for to-check = nil
 
 	  ;; primary key 
-	  do (with-slots (primary-key column-name foreign-key col-type referenced check) column
+	  do (with-slots (primary-key column-name foreign-key col-type referenced check) slot
 	       (setf column-name (db-syntax-prep slot-name)
-		     (slot-value column 'table) table)
+		     (slot-value slot 'table) table)
 	       (when primary-key
 		 (pushnew column-name primary-keys :test #'string=))
 	       (when referenced
@@ -325,24 +336,23 @@ with a single column of type serial."))
 
 	       ;;foreign-key and require-columns
 	       (cond (foreign-key
-		      (when (getf foreign-key :no-join)
-			(pushnew column require-columns :test #'eq))
-		      (setf (getf foreign-key :key) column-name)
-		      (unless (getf foreign-key :schema)
-			(setf (getf foreign-key :schema) (schema (find-class (getf foreign-key :table)))))
-		      (pushnew foreign-key foreign-keys :test #'equal)
-		      (pushnew (list :key slot-name
-				     :table (class-name class)
-				     :schema (getf foreign-key :schema)
-				     :references (getf foreign-key :column)
-				     :on-delete (getf foreign-key :on-delete)
-				     :on-update (getf foreign-key :on-update))
-			       (slot-value (find-class (getf foreign-key :table)) 'referenced-by)
-			       :test #'equal))
+		      (destructuring-bind (&key table column on-delete on-update no-join) foreign-key
+			(let ((key-class (apply #'make-instance 'foreign-key
+						:schema schema
+						:ref-schema schema
+						:ref-table (class-name class)
+						:key slot-name
+						foreign-key)))
+			  (when no-join
+			    (pushnew slot require-columns :test #'eq))
+			  (unless (member slot-name (mapcar #'key foreign-keys) :test #'eq)
+			    (pushnew key-class foreign-keys :test #'eq)
+			    (pushnew key-class (slot-value (find-class table) 'referenced-by)
+				     :test #'eq)))))
 		     (t
 		      (unless (or (eq col-type :serial)
 				  (eq col-type :timestamptz))
-			(pushnew column require-columns :test #'eq))))
+			(pushnew slot require-columns :test #'eq))))
 	       ;; check constraints
 	       (when check
 		 (setf (getf to-check :check) check
@@ -350,9 +360,9 @@ with a single column of type serial."))
 		       (getf to-check :table) table)
 		 (pushnew to-check constraints :test #'equal))))
 
-      ;; finish
-      (awhen primary-keys
-	(setf primary-keys (nreverse self)))))
+    ;; finish
+    (awhen primary-keys
+      (setf primary-keys (nreverse self)))))
 
 
 (defun serialized-p (supers)

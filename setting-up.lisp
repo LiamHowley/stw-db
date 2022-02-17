@@ -113,26 +113,6 @@
 
 ;;; foreign keys
 
-(define-layered-class foreign-key
-  :in-layer db-table-layer ()
-  ((key :initarg :key :initform nil :reader key)
-   (ref-schema :initarg :ref-schema :initform nil :reader ref-schema)
-   (ref-table :initarg :ref-table :initform nil :reader ref-table)
-   (table :initarg :table :initform nil :reader table)
-   (schema :initarg :schema :initform nil :reader schema)
-   (column :initarg :column :initform nil :reader column)
-   (on-update :initarg :on-update :initform nil :reader on-update)
-   (on-delete :initarg :on-delete :initform nil :reader on-delete)))
-
-
-(defmethod initialize-instance :after ((class foreign-key) &key)
-  (with-slots (key ref-schema ref-table column schema table) class
-    (setf table (set-sql-name schema table)
-	  column (db-syntax-prep column))
-    (unless key
-      (setf key (set-sql-name column)))))
-
-
 (define-layered-function foreign-keys-statements (class)
 
   (:method 
@@ -150,14 +130,18 @@
       :in db-table-layer ((class db-table-class))
     (with-slots (schema table foreign-keys) class
       (loop for key in foreign-keys
-	    collect (statement (apply #'make-instance 'foreign-key :ref-schema schema :ref-table table key))))))
+	    collect (statement key)))))
 
 
 (define-layered-method statement
   :in-layer db-table-layer ((statement foreign-key))
   (with-slots (schema key ref-schema ref-table table column on-update on-delete) statement
-    (let ((constraint (format nil "~a_~a_~a_fkey" schema ref-table key)))
-      (format nil "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '~a') THEN ALTER TABLE ~a.~a ADD CONSTRAINT ~a FOREIGN KEY (~a) REFERENCES ~a (~a)~@[ ON UPDATE ~a~]~@[ ON DELETE ~a~]; end if;" constraint ref-schema ref-table constraint key table column on-update on-delete))))
+    (let* ((key-column (db-syntax-prep key))
+	   (table-name (set-sql-name schema table))
+	   (referring-table (set-sql-name ref-schema ref-table))
+	   (constraint (format nil "~a_~a_~a_fkey" schema (db-syntax-prep ref-table) key-column))
+	   (column-name (db-syntax-prep column)))
+      (format nil "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '~a') THEN ALTER TABLE ~a ADD CONSTRAINT ~a FOREIGN KEY (~a) REFERENCES ~a (~a)~@[ ON UPDATE ~a~]~@[ ON DELETE ~a~]; end if;" constraint referring-table constraint key-column table-name column-name on-update on-delete))))
 
 
 
