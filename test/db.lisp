@@ -16,7 +16,7 @@
 
 (define-key-table user-base ()
   ((id :col-type :serial
-       :primary-key t
+       :root-key t
        :referenced t)))
 
 
@@ -72,9 +72,7 @@
 
 
 (define-interface-node user (user-base user-id user-email)
-  ()
-  (:key-columns . ((:table user-base :column id))))
-
+  ())
 
 
 (define-db-table user-name ()
@@ -155,9 +153,7 @@
 
 (define-interface-node account
   (user user-account user-name user-handle user-url)
-  ((sites :maps-table user-site
-	  :maps-column site))
-  (:key-columns . ((:table user-base :column id))))
+  ((sites :maps-table user-site :maps-column site)))
 
 
 

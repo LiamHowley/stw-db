@@ -12,17 +12,11 @@
     :initarg :tables
     :initform nil
     :accessor tables)
-   (key-columns
-    :initarg :key-columns
+   (root-key
     :initform nil
-    :documentation "Slots of equal value between two instances of the same class. Anchor for updating queries. Typically referenced by multiple columns, and is not updated. E.g. an ID column."
-    :reader key-columns)
-   (foreign-keys
-    :initarg :foreign-keys
-    :initform nil
-    :documentation "All foreign keys in interface node. Require referenced table and referenced column for each key."
-    :accessor foreign-keys
-    :type (null cons))
+    :initarg :root-key
+    :documentation "As a primary key is to a table, a root key is to a node. All referenced tables must have a foreign key referencing the root key column. Amongst other purposes, it represents a slot of equal value between two instances of the same class and serves as an anchor during updating operations. Once bound, it's value should not be updated. E.g. an ID column."
+    :reader root-key)
    (maps
     :initform nil
     :type list))
@@ -30,10 +24,10 @@
 
 
 (defmethod partial-class-base-initargs append ((class db-wrap))
-  '(:tables :key-columns))
+  '(:tables :root-key))
 
 (defclass db-base-column-definition
-  (stw-direct-slot-definition)
+    (stw-direct-slot-definition)
   ())
 
 (defclass db-aggregate-slot-definition (db-base-column-definition)
@@ -89,6 +83,7 @@ Set as alist ((COLUMN . VALUE))")))
    (table :initarg :table :initform nil :type symbol)
    (col-type :initarg :col-type :initform :text :reader col-type :type keyword)
    (primary-key :initarg :primary-key :initform nil :type boolean)
+   (root-key :initarg :root-key :initform nil :type boolean)
    (foreign-key :initarg :foreign-key :initform nil :reader foreign-key :type (cons null))
    (unique :initarg :unique :initform nil :type (boolean null))
    (check :initarg :check :initform nil :type (null cons))
@@ -104,10 +99,10 @@ Set as alist ((COLUMN . VALUE))")))
   'db-column-slot-definition)
 
 (define-layered-class db-interface-class
- :in-layer db-interface-layer (stw-base-class db-wrap) ())
+  :in-layer db-interface-layer (stw-base-class db-wrap) ())
 
 (define-layered-class db-table-class
- :in-layer db-table-layer (stw-base-class db) ())
+  :in-layer db-table-layer (stw-base-class db) ())
 
 (define-layered-class db-key-table
   :in-layer db-table-layer (db-table-class)
@@ -147,7 +142,7 @@ with a single column of type serial."))
 
 (define-layered-method initialize-in-context
   :in db-interface-layer ((slot db-aggregate-slot-definition) slot-names
-			  &key maps-table maps-column maps-columns)
+							      &key maps-table maps-column maps-columns)
   (declare (ignore slot-names))
   (with-slots (maps express-as-type) slot
     (let ((slot-name (slot-definition-name slot)))
@@ -175,13 +170,20 @@ with a single column of type serial."))
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((slot db-column-slot-definition) slot-names
-		      &key col-type table check primary-key referenced foreign-key &allow-other-keys)
+						       &key col-type table check primary-key referenced foreign-key root-key &allow-other-keys)
   (declare (ignore slot-names))
   (let ((slot-name (slot-definition-name slot)))
 
-    (when primary-key
-      (unless (eq col-type 'serial)
-	(setf (slot-value slot 'not-null) t)))
+    (flet ((process-primary-key ()
+	     (unless (eq col-type 'serial)
+	       (setf (slot-value slot 'not-null) t))))
+
+      (when root-key
+	(setf (slot-value slot 'primary-key) t)
+	(process-primary-key))
+
+      (when primary-key
+	(process-primary-key)))
 
     (when check
       (setf (slot-value slot 'check)
@@ -208,7 +210,6 @@ with a single column of type serial."))
 
 
 
-
 (defun sort-tables (tables backtrace-table)
   (loop
     until (eql (hash-table-count backtrace-table) 0)
@@ -232,12 +233,45 @@ with a single column of type serial."))
   tables)
 
 
+(define-layered-function ensure-bound-columns (class)
+  (:documentation "Ensure all tables are bound by means of a key column")
+
+  (:method
+      :in db-interface-layer ((class db-wrap))
+    (with-slots (tables root-key) class
+      (let* ((acc)
+	     (referring-table (slot-value root-key 'table))
+	     (referenced-by (slot-value (find-class referring-table) 'referenced-by)))
+	(when referenced-by
+	  (loop
+	    for fkey in referenced-by
+	    do (pushnew (slot-value fkey 'ref-table) acc)))
+	(reduce #'set-difference (list tables acc (list referring-table)))))))
+
+
+(define-layered-class root-key
+  :in-layer db-interface-layer ()
+  ((table :initarg :table :reader table)
+   (column :initarg :column :reader column)))
+
+
+(define-layered-class foreign-key
+  :in-layer db-table-layer (root-key)
+  ((key :initarg :key :initform nil :reader key)
+   (ref-schema :initarg :ref-schema :initform nil :reader ref-schema)
+   (ref-table :initarg :ref-table :initform nil :reader ref-table)
+   (schema :initarg :schema :initform nil :reader schema)
+   (on-update :initarg :on-update :initform nil :reader on-update)
+   (on-delete :initarg :on-delete :initform nil :reader on-delete)
+   (no-join :initarg :no-join :initform nil :reader no-join)))
+
+
 (define-layered-method initialize-in-context
   :in db-interface-layer ((class db-wrap) slot-names &key &allow-other-keys)
   (declare (ignore slot-names))
-  (with-slots (key-columns foreign-keys tables) class
+  (with-slots (root-key foreign-keys tables) class
 
-    ;; read relevant precedents into tables and each tables foreign-keys
+    ;; Read relevant precedents into tables and each tables foreign-keys
     ;; into the nodes foreign-key slot. Backtrace-table and f-key-table
     ;; are used for sorting foreign keys based on mutual dependencies.
     (let ((backtrace-table (make-hash-table :test #'eq)))
@@ -245,11 +279,15 @@ with a single column of type serial."))
 	       (loop
 		 for key in (slot-value table-class 'foreign-keys)
 		 do (with-slots (table column) key
-		      (let ((f-key (list :table table
-					 :column column)))
-			(if (gethash table backtrace-table)
-			    (pushnew (class-name table-class) (gethash table backtrace-table))
-			    (setf (gethash table backtrace-table) (list (class-name table-class)))))))))
+		      (let ((ref-slot (find-slot-definition table column 'db-column-slot-definition)))
+
+			;; Find root-key amongst foreign-keys and
+			;; set root-key for class
+			(when (slot-value ref-slot 'root-key)
+			  (setf root-key (make-instance 'root-key :table table :column column))))
+		      (if (gethash table backtrace-table)
+			  (pushnew (class-name table-class) (gethash table backtrace-table))
+			  (setf (gethash table backtrace-table) (list (class-name table-class))))))))
 	(loop
 	  for object in (filter-precedents-by-type class 'stw-base-class)
 
@@ -287,32 +325,11 @@ with a single column of type serial."))
 		     (setf maps column-map)))))))
 
       ;; now sort the tables
-      (setf tables (sort-tables tables backtrace-table)))
-    (when key-columns
-      (loop
-	for key-column in key-columns
-	do (let ((table (getf key-column :table)))
-	     (unless (find-class table)
-	       (error "Key column is a plist with keys :TABLE and :COLUMN. The assigned table value is not a table."))
-	     (unless (getf key-column :column)
-	       (error "There is no column value in the list ~a" key-column))
-	     (when tables
-	       (unless (member table tables :test #'eq)
-		 (error "Key column missing from tables")))
-	     (setf tables (cons table (remove table tables :test #'eq))))))))
-
-
-(define-layered-class foreign-key
-  :in-layer db-table-layer ()
-  ((key :initarg :key :initform nil :reader key)
-   (ref-schema :initarg :ref-schema :initform nil :reader ref-schema)
-   (ref-table :initarg :ref-table :initform nil :reader ref-table)
-   (table :initarg :table :initform nil :reader table)
-   (schema :initarg :schema :initform nil :reader schema)
-   (column :initarg :column :initform nil :reader column)
-   (on-update :initarg :on-update :initform nil :reader on-update)
-   (on-delete :initarg :on-delete :initform nil :reader on-delete)
-   (no-join :initarg :no-join :initform nil :reader no-join)))
+      (setf tables (sort-tables tables backtrace-table))))
+  ;; and ensure each column is tied to the root-key
+  (awhen (ensure-bound-columns class)
+    (error "the table(s) ~{~a^ ~} are not bound to a root-key. 
+They either don't belong in this node or a foreign key is required" self)))
 
 
 (define-layered-method initialize-in-context
@@ -362,7 +379,7 @@ with a single column of type serial."))
 
     ;; finish
     (awhen primary-keys
-      (setf primary-keys (nreverse self)))))
+	   (setf primary-keys (nreverse self)))))
 
 
 (defun serialized-p (supers)
@@ -382,7 +399,7 @@ with a single column of type serial."))
 
 (defmacro define-key-table (name &body body)
   `(define-db-class ,name db-table-layer db-key-table
-	 ,@body))
+     ,@body))
 
 (defmacro define-db-table (name &body body)
   `(define-db-class ,name db-table-layer db-table-class

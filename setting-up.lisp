@@ -136,12 +136,12 @@
 (define-layered-method statement
   :in-layer db-table-layer ((statement foreign-key))
   (with-slots (schema key ref-schema ref-table table column on-update on-delete) statement
-    (let* ((key-column (db-syntax-prep key))
+    (let* ((root-key (db-syntax-prep key))
 	   (table-name (set-sql-name schema table))
 	   (referring-table (set-sql-name ref-schema ref-table))
-	   (constraint (format nil "~a_~a_~a_fkey" schema (db-syntax-prep ref-table) key-column))
+	   (constraint (format nil "~a_~a_~a_fkey" schema (db-syntax-prep ref-table) root-key))
 	   (column-name (db-syntax-prep column)))
-      (format nil "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '~a') THEN ALTER TABLE ~a ADD CONSTRAINT ~a FOREIGN KEY (~a) REFERENCES ~a (~a)~@[ ON UPDATE ~a~]~@[ ON DELETE ~a~]; end if;" constraint referring-table constraint key-column table-name column-name on-update on-delete))))
+      (format nil "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '~a') THEN ALTER TABLE ~a ADD CONSTRAINT ~a FOREIGN KEY (~a) REFERENCES ~a (~a)~@[ ON UPDATE ~a~]~@[ ON DELETE ~a~]; end if;" constraint referring-table constraint root-key table-name column-name on-update on-delete))))
 
 
 
