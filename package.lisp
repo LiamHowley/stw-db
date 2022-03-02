@@ -11,7 +11,8 @@
 		:explode-string
 		:with-gensyms
 		:map-tree-depth-first
-		:ordered-plist-values)
+		:ordered-plist-values
+		:ensure-list)
   (:import-from :stw.meta
 		:with-context
 		:define-base-class
@@ -55,12 +56,17 @@
 		:exec-query
 		:get-postgresql-version
 		:database-error
-		:database-error-code)
+		:database-error-code
+		:row-reader
+		:next-row
+		:next-field
+		:field-name)
   (:import-from :atomics
 		:implementation-not-supported
 		:atomic-pop
 		:atomic-push)
   (:import-from :fare-memoization
+		:memoized-funcall
 		:memoize
 		:unmemoize)
   (:import-from :bordeaux-threads
