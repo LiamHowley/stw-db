@@ -55,9 +55,9 @@
 (define-table-op drop-table
   "DROP TABLE ~a;"
   "You are about to drop the table(s): ~a."
-  (class-name class))
+  (db-syntax-prep (class-name class)))
 
 (define-table-op truncate-table
   "TRUNCATE TABLE ~a RESTART IDENTITY CASCADE;"
   "You are about to delete all data from the table(s): ~a."
-  (class-name class))
+  (db-syntax-prep (class-name class)))
