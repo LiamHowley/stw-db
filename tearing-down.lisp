@@ -16,12 +16,15 @@
 
 ;;; schema
 
-(define-layered-function drop-schema (schema)
+(define-layered-function drop-schema (schema &optional cascade)
   (:method
-      :in db-layer (schema)
+      :in db-layer (schema &optional cascade)
     (safety-first
       (warn "Schema ~a is about to be dropped." schema)
-      (exec-query *db* (format nil "DROP SCHEMA ~(~a~)" schema)))))
+      (restart-case
+	  (exec-query *db* (format nil "DROP SCHEMA ~(~a~)~@[ cascade~]" schema cascade))
+	(cascade () (drop-schema schema t))))))
+	  
 
 
 ;;; tables
