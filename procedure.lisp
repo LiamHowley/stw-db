@@ -6,28 +6,32 @@
   ((schema :initarg :schema :accessor schema)
    (name :initarg :name :accessor name)
    (args :initarg :args :initform nil :accessor args)
+   (p-controls :initarg :controls :initform nil :accessor p-controls)
    (p-values :initarg :values :initform nil :accessor p-values)
    (vars :initarg :vars :initform nil :accessor vars)
    (sql-list :initarg :sql-list :initform nil :accessor sql-list)
    (sql-statement :initarg :sql-statement :initform nil :reader sql-statement)))
 
+(define-layered-class table-proc
+  :in db-table-layer (procedure)
+  ((table :initarg :table :reader table)))
 
 (define-layered-method statement
-  :in-layer db-interface-layer ((class procedure))
+  :in-layer db-layer ((class procedure))
   (with-slots (schema name args vars sql-list sql-statement) class
     (setf sql-statement
 	  (format nil "CREATE OR REPLACE PROCEDURE ~a (~a)~%LANGUAGE plpgsql~%AS $BODY$~%~a~%BEGIN~%~a~%END;~%$BODY$;"
 		  (set-sql-name schema name)
-		  (format nil "~@[~{~{~a~@[ ~a~]~}~^, ~}~]" args)
+		  (format nil "~@[~{~{~a ~a~@[ ~a~]~}~^, ~}~]" args)
 		  (format nil "~@[DECLARE~%~{~{~a ~a~@[ := ~a~];~}~%~}~]" vars)
 		  (format nil "~{~a~^~%~}" sql-list)))
     class))
 
 (define-layered-function call-statement (class)
   (:method 
-    :in-layer db-interface-layer ((class procedure))
-  (with-slots (schema name p-values) class
-    (format nil "CALL ~a.~a (~@[~{~a~^, ~}~])" schema name p-values))))
+      :in-layer db-layer ((class procedure))
+    (with-slots (schema name p-values) class
+      (format nil "CALL ~a.~a (~@[~{~a~^, ~}~])" schema name p-values))))
 
 
 (defstruct component
@@ -36,6 +40,8 @@
   (params)
   (param-controls))
 
+(defstruct var
+  column var param)
 
 ;;; pg composite arrays - used in passing values to insert procedure calls
 
