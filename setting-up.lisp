@@ -118,7 +118,7 @@
   (:method 
       :in db-interface-layer ((class db-interface-class))
     (with-slots (tables) class
-      (let ((collated-keys))
+      (let (collated-keys)
 	(loop for table in tables
 	      for f-keys = (with-active-layers (db-table-layer)
 			     (foreign-keys-statements (find-class table)))
@@ -232,7 +232,7 @@ parameter to reference the array.")
   (:documentation "Builds database components required by class")
 
   (:method
-      :in db-interface-layer ((class db-interface-class) (name string) &rest function-list)
+      :in db-layer (class (name string) &rest function-list)
     (let ((procedure (make-instance 'procedure
 				    :schema (slot-value class 'schema)
 				    :name name)))
