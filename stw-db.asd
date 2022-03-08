@@ -17,6 +17,7 @@
 		 (:file "procedure")
 		 (:file "dispatch")
 		 (:file "insert")
+		 (:file "delete"))
     :long-description
     #.(uiop:read-file-string
        (uiop:subpathname *load-pathname* "README.txt"))
