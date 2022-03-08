@@ -19,7 +19,8 @@
     :reader root-key)
    (maps
     :initform nil
-    :type list))
+    :type list
+    :reader maps))
   (:documentation "Aggregate tables for transactions, cte's, etc. Map to application objects."))
 
 
