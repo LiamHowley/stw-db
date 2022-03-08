@@ -63,7 +63,7 @@ Set as alist ((COLUMN . VALUE))")))
 ;;; DB-TABLE-LAYER metaclasses
 
 (define-layered-class db
-  :in db-table-layer (base-class)
+  :in db-table-layer (singleton-class base-class)
   ((schema :initarg :schema :initform "public" :reader schema :type string)
    (table :initarg :table :initform nil :reader table :type string)
    (primary-keys :initarg :primary-keys :initform nil :accessor primary-keys :type (null cons))
@@ -79,7 +79,7 @@ Set as alist ((COLUMN . VALUE))")))
   '(:schema :table :primary-keys :foreign-keys :referenced-by :constraints))
 
 
-(defclass db-column-slot-definition (db-base-column-definition)
+(defclass db-column-slot-definition (singleton-direct-slot-definition db-base-column-definition)
   ((schema :initform nil :type string)
    (table :initarg :table :initform nil :type symbol)
    (col-type :initarg :col-type :initform :text :reader col-type :type keyword)
