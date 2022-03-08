@@ -15,7 +15,8 @@
 		 (:file "setting-up")
 		 (:file "tearing-down")
 		 (:file "procedure")
-		 (:file "insert"))
+		 (:file "dispatch")
+		 (:file "insert")
     :long-description
     #.(uiop:read-file-string
        (uiop:subpathname *load-pathname* "README.txt"))

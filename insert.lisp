@@ -42,7 +42,7 @@
       :in-layer db-table-layer ((class serialize) (component db-table-class))
     (let ((procedure (memoized-funcall #'generate-insert-component component)))
       (values
-       (insert-dispatch-statement class procedure)
+       (dispatch-statement class procedure)
        procedure))))
 
 
@@ -97,34 +97,7 @@
 
 
 
-(define-layered-function process-values (class controls mapped)
-  (:documentation "Values are collated, prepared and passed as args
-to be formatted. Mapped slots are refer to the mapping slot for value
-acquisition. Returns pg array string.")
 
-  (:method
-      :in-layer db-layer ((class serialize) (controls cons) mapped)
-    (destructuring-bind (control slots) controls
-      (setf slots (ensure-list slots))
-      (let ((parenthesize (when (eql (length slots) 1) t)))
-	(apply #'format nil control
-	       (if mapped
-		   ;; one to many 
-		   (loop
-		     for mapping in mapped
-		     for mapping-node = (mapping-node mapping)
-		     for mapping-slot-name = (slot-definition-name (mapping-slot mapping))
-		     when (eq (class-of class) mapping-node)
-		       collect (loop for value in (slot-value class mapping-slot-name)
-				     collect (prepare-value (slot-value (mapped-column mapping) 'col-type)
-							    value
-							    parenthesize)))
-		   ;; one to one 
-		   (loop
-		     for slot in slots
-		     for slot-name = (slot-definition-name slot)
-		     collect (prepare-value (slot-value slot 'col-type)
-					    (slot-value class slot-name) parenthesize))))))))
 
 
 (define-layered-function generate-insert-component (class)
@@ -259,50 +232,30 @@ and not null. Returns a boolean.")
 
 
 
-
 (define-layered-function insert-dispatch-statement (class procedure)
-
-  (:method
-      :in-layer db-layer :around ((class serialize) (procedure procedure))
-    (with-slots (name p-values) procedure
-      (setf schema (slot-value (class-of class) 'schema)
-	    p-values (call-next-layered-method))
-    (call-statement procedure)))
-
   (:method
       :in-layer db-interface-layer ((class serialize) (procedure procedure))
-    (let* ((base-class (class-of class))
-	   (components (generate-insert-components base-class))
-	   (tables (include-tables class)))
-      (with-slots (schema) procedure
-	(setf name (format nil "~(~a~)_insert" (class-name base-class))))
-      (loop
-	with declared-vars = nil
-	for table in tables
-	for param-control = (slot-value (gethash table components) 'param-controls)
-	for declarations = (slot-value (gethash table components) 'declarations)
-	for mapped-table = (slot-value (find-class table) 'mapped-by)
-	when declarations
-	  do (loop
-	       for declaration in declarations
-	       do (push "null" declared-vars))
-	when (or param-control mapped-table)
-	  collect (process-values class param-control mapped-table) into params
-	finally (return (nconc declared-vars params)))))
-
-  (:method
-      :in-layer db-table-layer ((class serialize) (procedure table-proc))
-    (with-slots (p-controls table) procedure
-      (loop
-	with mapped-by = (slot-value table 'mapped-by)
-	for control in p-controls
-	if (car control)
-	  collect (process-values class control mapped-by)
-	else
-	  collect (let ((slot (cadr control)))
-		    (prepare-value (slot-value slot 'col-type)
-				   (slot-value class (slot-definition-name slot))))))))
-
+    (with-slots (p-values) procedure
+      (setf schema (slot-value (class-of class) 'schema)
+	    p-values (let* ((base-class (class-of class))
+			    (components (generate-insert-components base-class))
+			    (tables (include-tables class)))
+		       (with-slots (schema) procedure
+			 (setf name (format nil "~(~a~)_insert" (class-name base-class))))
+		       (loop
+			 with declared-vars = nil
+			 for table in tables
+			 for param-control = (slot-value (gethash table components) 'param-controls)
+			 for declarations = (slot-value (gethash table components) 'declarations)
+			 for mapped-table = (slot-value (find-class table) 'mapped-by)
+			 when declarations
+			   do (loop
+				for declaration in declarations
+				do (push "null" declared-vars))
+			 when (or param-control Mapped-table)
+			   collect (process-values class param-control mapped-table) into params
+			 finally (return (nconc declared-vars params)))))
+      (call-statement procedure))))
 
 
 (define-layered-function insert-statement (class procedure)
