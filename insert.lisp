@@ -124,7 +124,7 @@
 	    else
 	      do (push (list :in column-name column-type) args)
 	      and do (push (format nil "$~a" i) select)
-	      and do (push `(nil ,slot) p-controls)
+	      and do (push `("NULL" ,slot) p-controls)
 	      and do (incf i)
 	    collect column-name into columns%
 	    finally (setf array-position (format nil "$~a" i)
