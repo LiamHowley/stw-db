@@ -242,12 +242,12 @@ with a single column of type serial."))
     (with-slots (tables root-key) class
       (let* ((acc)
 	     (referring-table (slot-value root-key 'table))
-	     (referenced-by (slot-value (find-class referring-table) 'referenced-by)))
+	     (referenced-by (slot-value referring-table 'referenced-by)))
 	(when referenced-by
 	  (loop
 	    for fkey in referenced-by
 	    do (pushnew (slot-value fkey 'ref-table) acc)))
-	(reduce #'set-difference (list tables acc (list referring-table)))))))
+	(reduce #'set-difference (list tables acc (list (class-name referring-table))))))))
 
 
 (define-layered-class root-key
@@ -285,7 +285,8 @@ with a single column of type serial."))
 			;; Find root-key amongst foreign-keys and
 			;; set root-key for class
 			(when (slot-value ref-slot 'root-key)
-			  (setf root-key (make-instance 'root-key :table table :column column))))
+			  (setf root-key (make-instance 'root-key :table (find-class table)
+								  :column ref-slot))))
 		      (if (gethash table backtrace-table)
 			  (pushnew (class-name table-class) (gethash table backtrace-table))
 			  (setf (gethash table backtrace-table) (list (class-name table-class))))))))
@@ -348,7 +349,7 @@ They either don't belong in this node or a foreign key is required" self)))
 	       (setf column-name (db-syntax-prep slot-name)
 		     (slot-value slot 'table) table)
 	       (when primary-key
-		 (pushnew column-name primary-keys :test #'string=))
+		 (pushnew slot primary-keys :test #'eq))
 	       (when referenced
 		 (pushnew (list column-name col-type) referenced-columns :test #'equal))
 
@@ -380,7 +381,7 @@ They either don't belong in this node or a foreign key is required" self)))
 
     ;; finish
     (awhen primary-keys
-	   (setf primary-keys (nreverse self)))))
+      (setf primary-keys (nreverse self)))))
 
 
 (defun serialized-p (supers)

@@ -100,7 +100,7 @@
   :in-layer db-table-layer ((clause primary-key))
   (with-slots (keys) clause
     (when keys
-      (format nil "PRIMARY KEY (~{~a~^, ~})" keys))))
+      (format nil "PRIMARY KEY (~{~a~^, ~})" (mapcar #'column-name keys)))))
 
 
 (define-layered-method clause
@@ -180,7 +180,7 @@
     (with-slots (schema table primary-keys) class
       (loop for slot in (filter-slots-by-type class 'db-column-slot-definition)
 	    for key = (db-syntax-prep (slot-definition-name slot))
-	    unless (member key primary-keys :test #'equal)
+	    unless (member slot primary-keys :test #'eq)
 	      when (or (slot-value slot 'foreign-key)
 		       (slot-value slot 'index))
 		collect (clause (make-instance 'index :schema schema
