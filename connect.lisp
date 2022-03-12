@@ -59,7 +59,7 @@ macro, or it's wrappers DB-INTERFACE and DB-TABLE."
 	      (db-pool-lock (make-lock "connection-pool-lock")))
 	 (capture-dynamic-environment)))))
 
-(defmacro db-connect (env layer &body body)
+(defmacro db-connect (env (&optional (layer db-interface-layer)) &body body)
   "DB-CONNECT requires an environment, defined by the DEFINE-DB-ENVIRONMENT
 macro, and a layer of type DB-LAYER, DB-INTERFACE-LAYER or DB-TABLE-LAYER.
 Environment parameters are accessed within DB-CONNECT and the resulting connection
@@ -74,13 +74,17 @@ Environment parameters are accessed within DB-CONNECT and the resulting connecti
 	     (unwind-protect (progn ,@body)
 	       (close-connection *db* ,pool))))))))
 
-(defmacro db-interface (env &body body)
-  "Wrapper for DB-CONNECT using the DB-INTERFACE-LAYER."
-  `(db-connect ,env db-interface-layer ,@body))
+(defmacro db-update-node (env node &body body)
+  "Wrapper for DB-CONNECT using the DB-UPDATE-NODE-LAYER."
+  `(db-connect ,env (update-node)
+     (let ((original (clone-object ,node)))
+       ,@body)))
 
-(defmacro db-table (env &body body)
-  "Wrapper for DB-CONNECT using the DB-TABLE-LAYER."
-  `(db-connect ,env db-table-layer ,@body))
+(defmacro db-update-table (env node &body body)
+  "Wrapper for DB-CONNECT using the DB-UPDATE-NODE-LAYER."
+  `(db-connect ,env (update-table)
+     (let ((original (clone-object ,node)))
+       ,@body)))
 
 
 ;;(define-db-environment db

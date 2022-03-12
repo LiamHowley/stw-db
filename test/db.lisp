@@ -200,7 +200,6 @@
     (false (index-statement (find-class 'validate)))))
 
 
-
 (defvar *account*)
 
 (define-test inserting...
@@ -242,7 +241,7 @@
 	(of-type 'db-column-slot-definition (caadr format-components))
 	(is string= "ARRAY[('(foo@bar.com)')]::stw.user_email_type[]"
 	    (stw.db::process-values *account* format-components (slot-value (find-class 'user-email) 'stw.db::mapped-by))))
-	  
+      
       (let ((format-components (stw.db::sql-typed-array (find-class 'user-site))))
 	(is string= "ARRAY[~{(~a)~^, ~}]::stw.user_site_type[]" (car format-components))
 

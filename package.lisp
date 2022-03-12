@@ -27,7 +27,7 @@
 		:find-slot-definition
 		:filter-slots-by-type
 		:filter-precedents-by-type
-		:object-to-plist)
+		:clone-object)
   (:import-from :contextl
 		:defdynamic
 		:dynamic
@@ -59,6 +59,7 @@
 		:database-error
 		:database-error-code
 		:row-reader
+		:ignore-row-reader
 		:next-row
 		:next-field
 		:field-name)
@@ -77,13 +78,20 @@
 	   :define-key-table
 	   :define-interface-node
 
+	   :db-layer
 	   :db-interface-layer
 	   :db-table-layer
-	   :db-layer
+	   :insert-node
+	   :update-node
+	   :retrieve-node
+	   :delete-node
+	   :insert-table
+	   :update-table
+	   :retrieve-table
+	   :delete-table
 
-	   :db-interface
-	   :db-table
 	   :db-connect
+	   :db-update
 	   :connection-pool
 	   :clear-connection-pool
 	   

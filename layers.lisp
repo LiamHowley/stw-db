@@ -31,10 +31,58 @@
    t))
 
 
-(deflayer db-table-layer (db-layer)
-  ()
-  (:metaclass stw-table))
+;; database operations contexts
+
+(deflayer insert)
+
+(deflayer delete-from)
+
+(deflayer update)
+
+(deflayer retrieve)
+
+
+;; create interface-node layer contexts for database operations
 
 (deflayer db-interface-layer (db-layer)
   ()
   (:metaclass stw-interface))
+
+(deflayer insert-node (insert db-interface-layer)
+  ()
+  (:metaclass stw-interface))
+
+(deflayer delete-node (delete-from db-interface-layer)
+  ()
+  (:metaclass stw-interface))
+
+(deflayer update-node (update db-interface-layer)
+  ()
+  (:metaclass stw-interface))
+
+(deflayer retrieve-node (retrieve db-interface-layer)
+  ()
+  (:metaclass stw-interface))
+
+
+;; create table layer contexts for database operations
+
+(deflayer db-table-layer (db-layer)
+  ()
+  (:metaclass stw-table))
+
+(deflayer insert-table (insert db-table-layer)
+  ()
+  (:metaclass stw-table))
+
+(deflayer delete-table (delete-from db-table-layer)
+  ()
+  (:metaclass stw-table))
+
+(deflayer update-table (update db-table-layer)
+  ()
+  (:metaclass stw-table))
+
+(deflayer retrieve-table (retrieve db-table-layer)
+  ()
+  (:metaclass stw-table))
