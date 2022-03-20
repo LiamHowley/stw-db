@@ -41,7 +41,6 @@
 		:define-layered-method
 		:call-next-layered-method
 		:singleton-class
-		:singleton-direct-slot-definition
 		:partial-class
 		:partial-class-base-initargs
 		:remove-layer

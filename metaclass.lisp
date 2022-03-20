@@ -79,9 +79,10 @@ Set as alist ((COLUMN . VALUE))")))
   '(:schema :table :primary-keys :foreign-keys :referenced-by :constraints))
 
 
-(defclass db-column-slot-definition (singleton-direct-slot-definition db-base-column-definition)
+(defclass db-column-slot-definition (db-base-column-definition)
   ((schema :initform nil :type string)
-   (table :initarg :table :initform nil :type symbol)
+   (table-class :initform nil :reader table-class)
+   (table :initarg :table :initform nil :reader table)
    (col-type :initarg :col-type :initform :text :reader col-type :type keyword)
    (primary-key :initarg :primary-key :initform nil :type boolean)
    (root-key :initarg :root-key :initform nil :type boolean)
@@ -170,8 +171,8 @@ with a single column of type serial."))
 ;;  (declare (ignore slot-names))
 
 (define-layered-method initialize-in-context
-  :in db-table-layer ((slot db-column-slot-definition) slot-names
-						       &key col-type table check primary-key referenced foreign-key root-key &allow-other-keys)
+  :in db-table-layer ((slot db-column-slot-definition)
+		      slot-names &key col-type table check primary-key referenced foreign-key root-key &allow-other-keys)
   (declare (ignore slot-names))
   (let ((slot-name (slot-definition-name slot)))
 
@@ -345,9 +346,10 @@ They either don't belong in this node or a foreign key is required" self)))
 	  for to-check = nil
 
 	  ;; primary key 
-	  do (with-slots (primary-key column-name foreign-key col-type referenced check) slot
+	  do (with-slots (table-class primary-key column-name foreign-key col-type referenced check) slot
 	       (setf column-name (db-syntax-prep slot-name)
-		     (slot-value slot 'table) table)
+		     (slot-value slot 'table) table
+		     table-class class)
 	       (when primary-key
 		 (pushnew slot primary-keys :test #'eq))
 	       (when referenced
