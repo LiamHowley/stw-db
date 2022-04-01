@@ -5,6 +5,7 @@
 
 (define-layered-function make-sql-statement (class procedure &optional tables))
 
+(define-layered-function error-handler (class procedure error component))
 
 (define-layered-function read-row-to-class (class)
 
