@@ -4,7 +4,7 @@
 (define-layered-class procedure
   :in db-layer ()
   ((schema :initarg :schema :accessor schema)
-   (name :initarg :name :accessor name)
+   (name :initarg :name :initform nil :accessor name)
    (args :initarg :args :initform nil :accessor args)
    (p-controls :initarg :controls :initform nil :accessor p-controls)
    (p-values :initarg :values :initform nil :accessor p-values)
