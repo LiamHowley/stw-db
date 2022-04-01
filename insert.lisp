@@ -195,7 +195,7 @@ and not null. Returns a boolean.")
 	do (loop
 	     for declaration in declarations
 	     do (push "null" declared-vars))
-      when (or param-control Mapped-table)
+      when (or param-control mapped-table)
 	collect (process-values class param-control mapped-table) into params
       finally (return (nconc declared-vars params)))))
 
