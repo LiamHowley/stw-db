@@ -206,8 +206,7 @@ and not null. Returns a boolean.")
 	 (components (generate-components base-class)))
     (with-slots (schema args vars sql-list sql-statement) procedure
       (setf schema (slot-value base-class 'schema))
-      (let ((out-params)
-	    (returns))
+      (let ((returns))
 	(loop
 	  with num = 0
 	  for table in tables
@@ -231,7 +230,7 @@ and not null. Returns a boolean.")
 			 (push params args)
 			 (push (format nil sql (incf num)) sql-list))))
 		     (t (push sql sql-list)))))
-	(setf args (nconc (nreverse args) out-params)
+	(setf args (nreverse args)
 	      sql-list (nconc (nreverse sql-list) returns)
 	      vars (nreverse vars)))
       (statement procedure))))
@@ -297,7 +296,6 @@ with the key value pair, class-name => COMPONENT. Results are cached.")
 		       table-name (set-sql-name table column) (car (var-var (car declared-var))))
 	  :declarations declared-var)))))
 
-	     
   (:method
       :in-layer db-table-layer ((class db-table-class))
     (with-slots (schema table require-columns referenced-columns) class
