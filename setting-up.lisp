@@ -202,7 +202,8 @@
   (:documentation "Creating an explicit type associated with a class, 
 allows the values to be expressed as an array within the arglist of a
 procedure. It is a simple matter then of calling unnest, using a positional
-parameter to reference the array.")
+parameter to reference the array. This is particularly useful when adding
+multiple records in a one-to-many relationship.")
 
   (:method
       :in db-interface-layer ((class db-interface-class))
@@ -220,10 +221,42 @@ parameter to reference the array.")
       :in db-table-layer ((class db-table-class)) 
     (with-slots (schema table require-columns) class
       (let ((table-name (set-sql-name schema table)))
-	(format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a_type') THEN CREATE TYPE ~a_type AS (~{~{~a ~a~}~^, ~}); END IF;" (db-syntax-prep table) table-name (mapcar #'(lambda (column)
-				       (list (column-name column)
-					     (col-type column)))
-				   require-columns))))))
+	(format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a_type') THEN CREATE TYPE ~a_type AS (~{~{~a ~a~}~^, ~}); END IF;"
+		(db-syntax-prep table) table-name (mapcar #'(lambda (column)
+							      (list (column-name column)
+								    (col-type column)))
+							  require-columns))))))
+
+
+;;; create domain
+
+
+(define-layered-function create-typed-domain (class)
+    (:documentation "Creates explicit domains associated with respective columns.
+As domains are typed they are useful to generate dynamic overloaded sql procedures
+so that differing columns of the same type can be applied to a procedure call.")
+
+  (:method
+      :in db-interface-layer ((class db-interface-class))
+    (with-slots (tables) class
+      (loop
+	for table in tables
+	for required = (require-columns (find-class table))
+	for domain = (when required
+		       (with-active-layers (db-table-layer)
+			 (create-typed-domain (find-class table))))
+	when domain
+	collect domain)))
+
+  (:method
+      :in db-table-layer ((class db-table-class)) 
+    (with-slots (domain schema table require-columns) class
+      (format nil "~{~a~}"
+	      (loop
+		for column in require-columns
+		collect (with-slots (domain col-type) column
+			  (format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE DOMAIN ~a.~a AS ~a; END IF;"
+				  domain schema domain col-type)))))))
     
 
 ;;; setting up

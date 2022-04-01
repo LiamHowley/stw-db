@@ -29,7 +29,7 @@
 	      ;; Response: Create types for all relevant
 	      ;; table inserts. 
 	      (let ((proc-name (format nil "initialize_~a_types" class-name)))
-		(respond proc-name #'create-pg-composite)))
+		(respond proc-name #'create-pg-composite #'create-typed-domain)))
 	     ("42P01"
 	      ;; MISSING TABLE OR TYPE IN DB.
 	      ;; Response: rebuild database component and
