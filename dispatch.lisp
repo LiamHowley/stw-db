@@ -85,6 +85,14 @@ to be formatted. Mapped slots are refer to the mapping slot for value
 acquisition. Returns pg array string.")
 
   (:method
+      :in-layer db-layer 
+      :around ((class serialize) (controls cons) mapped &optional parenthesize)
+    (let ((slots (ensure-list (cadr controls))))
+      (call-next-layered-method class controls mapped (or parenthesize
+							  (unless (> (length slots) 1)
+							    t)))))
+
+  (:method
       :in-layer db-layer ((class serialize) (controls cons) mapped &optional parenthesize)
     (destructuring-bind (control slots) controls
       (setf slots (ensure-list slots))

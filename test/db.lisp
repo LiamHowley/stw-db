@@ -247,4 +247,5 @@
 
 	(setf (slot-value *account* 'sites) '("foo.com" "bar.com" "baz.com"))
 	(is string= "ARRAY[('(foo.com)'), ('(bar.com)'), ('(baz.com)')]::stw.user_site_type[]"
-	    (stw.db::process-values *account* format-components (slot-value (find-class 'user-site) 'stw.db::mapped-by)))))))
+	    (stw.db::process-values *account* format-components
+				    (stw.db::match-mapping-node (class-of *account*) (find-class 'user-site))))))))

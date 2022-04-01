@@ -165,13 +165,6 @@ and not null. Returns a boolean.")
 
 
 
-(define-layered-method process-values
-  :in-layer insert ((class serialize) (controls cons) mapped &optional parenthesize)
-  (let ((slots (ensure-list (cadr controls))))
-    (call-next-layered-method class controls mapped (or parenthesize
-							(when (eql (length slots) 1)
-							  t)))))
-
 (define-layered-method dispatch-statement 
   :in-layer insert :around ((class serialize) (procedure procedure))
   (declare (ignore class))
