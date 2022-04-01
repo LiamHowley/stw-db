@@ -53,6 +53,18 @@
        procedure))))
 
 
+(define-layered-function match-mapping-node (class table)
+
+  (:documentation "Confirm class maps table, and return relevant instance
+of SLOT-MAPPING.")
+
+  (:method
+    :in-layer db-interface-layer ((class db-interface-class) (table db-table-class))
+    (loop
+      for mapping in (slot-value table 'mapped-by)
+      when (eq (mapping-node mapping) class)
+	do (return mapping))))
+
 
 (define-layered-function dispatch-statement (class procedure)
 
