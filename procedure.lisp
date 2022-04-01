@@ -1,6 +1,9 @@
 (in-package stw.db)
 
 
+(define-layered-function generate-component (class))
+
+
 (define-layered-class procedure
   :in db-layer ()
   ((schema :initarg :schema :accessor schema)
@@ -60,3 +63,37 @@
 		     collect "~a")
 		 table-name)
 	 require-columns)))))
+
+
+
+
+(define-layered-function generate-procedure (class)
+
+  (:method
+      :in-layer db-table-layer ((class db-table-class))
+    (with-slots (schema table require-columns referenced-columns) class
+      (let ((procedure (make-instance 'table-proc
+				      :schema schema
+				      :table class))
+	    (returns))
+	(with-slots (args vars sql-list p-controls) procedure
+	  (let ((component (the-component class)))
+	    (with-slots (sql params param-controls declarations) component
+	      (loop
+		for declaration in declarations
+		for var = (var-var declaration)
+		collect (var-param declaration) into params%
+		collect var into vars%
+		collect (format nil "~a := ~a;" (var-column declaration) (car var)) into returns%
+		finally (setf vars vars%
+			      params (nconc params params%)
+			      returns returns%))
+	      (setf sql-list `(,(apply #'format nil sql
+				       (loop
+					 for i from 1 to (length params)
+					 collect i))
+			       ,@returns)
+		    args params
+		    p-controls param-controls))))
+	procedure))))
+

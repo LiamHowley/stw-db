@@ -47,70 +47,45 @@
 	     (t (error err))))))
 
 
+(define-layered-method generate-procedure
+  :in-layer insert-table
+  :around ((class db-table-class))
+  (let ((procedure (call-next-method)))
+    (setf (slot-value procedure 'name)
+	  (format nil "~(~a~)_insert" (db-syntax-prep (class-name class))))
+    (statement procedure)
+    procedure))
+
 
 (define-layered-method generate-component
   :in-layer insert-table ((class db-table-class))
   (with-slots (schema table require-columns referenced-columns) class
-    (let ((type-array (format nil "~a.~a_type[]" schema table))
-	  (columns)
-	  (select)
-	  (procedure (make-instance 'table-proc
-				    :schema schema
-				    :table class
-				    :name (format nil "~(~a~)_insert" (db-syntax-prep (class-name class)))))
-	  (array-position))
-      (with-slots (args sql-list p-controls) procedure
-	(loop
-	  with i = 1
-	  for slot in (filter-slots-by-type class 'db-column-slot-definition)
-	  for column-name = (slot-value slot 'column-name)
-	  for column-type = (slot-value slot 'col-type)
-	  if (member slot require-columns :test #'eq)
-	    collect column-name into required-columns
-	  else
-	    do (push (list :in column-name column-type) args)
-	    and do (push (format nil "$~a" i) select)
-	    and do (push `(nil ,slot) p-controls)
-	    and do (incf i)
-	  collect column-name into columns%
-	  finally (setf array-position (format nil "$~a" i)
-			columns columns%)
-		  (push (list :in type-array nil) args)
-		  (push (sql-typed-array class) p-controls)
-		  (setf args (nreverse args)
-			p-controls (nreverse p-controls)
-			select (nconc (nreverse select) required-columns)))
-	(setf sql-list
-	      (list
-	       (format nil
-		       "INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} from unnest(~a);"
-		       (set-sql-name schema table)
-		       columns
-		       select
-		       array-position))))
-      (statement procedure))))
-  
+    (let ((type-array (format nil "~a.~a_type[]" schema table)))
+      (loop
+	for slot in (filter-slots-by-type class 'db-column-slot-definition)
+	for column-name = (slot-value slot 'column-name)
+	for column-type = (slot-value slot 'col-type)
+	if (member slot require-columns :test #'equality)
+	  collect column-name into required-columns
+	else
+	  collect (list :in column-name column-type) into args
+	  and collect "$~a" into select
+	  and collect `(nil ,slot) into p-controls
+	collect column-name into columns
+	finally (return
+		  (make-component
+		   :sql (format nil
+				"INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} from unnest($~~a);"
+				(set-sql-name schema table)
+				columns
+				(nconc select required-columns))
+		   :params `(,@args (:in ,type-array nil))
+		   :param-controls `(,@p-controls ,(sql-typed-array class))))))))
 
-(define-layered-method generate-component
+
+(define-layered-method insert-component
   :in insert-table ((class db-key-table))
-  (with-slots (schema table) class
-    (let ((procedure
-	    (make-instance 'table-proc
-			   :schema schema
-			   :table class
-			   :name (format nil "~(~a~)_insert" (class-name class)))))
-      (with-slots (sql-list args) procedure
-	(let* ((slot (car (filter-slots-by-type class 'db-column-slot-definition)))
-	       (column-name (column-name slot))
-	       (table-name (set-sql-name schema table))
-	       (arg (format nil "_~a_~a" (db-syntax-prep table) column-name)))
-	  (setf args (list :in arg (let ((col-type (col-type slot)))
-				     (if (eq col-type :serial) :integer col-type))))
-	  (setf sql-list
-		(list (format nil "INSERT INTO ~a DEFAULT VALUES RETURNING ~a INTO ~a;"
-			      table-name column-name arg)))
-	  (statement procedure))))))
-
+  (nth-value 1 (generate-components class)))
 
 
 (define-layered-function include-tables (class)
@@ -191,6 +166,7 @@ and not null. Returns a boolean.")
       when (or param-control mapped-table)
 	collect (process-values class param-control mapped-table) into params
       finally (return (nconc declared-vars params)))))
+
 
 
 (define-layered-method make-sql-statement

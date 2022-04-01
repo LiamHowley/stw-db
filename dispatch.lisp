@@ -1,8 +1,6 @@
 (in-package stw.db)
 
 
-(define-layered-function generate-component (class))
-
 (define-layered-function make-sql-statement (class procedure &optional tables))
 
 (define-layered-function error-handler (class procedure error component))
@@ -47,7 +45,7 @@
 
   (:method
       :in-layer db-layer ((class serialize) (component db-table-class))
-    (let ((procedure (memoized-funcall #'generate-component component)))
+    (let ((procedure (memoized-funcall #'generate-procedure component)))
       (values
        (dispatch-statement class procedure)
        procedure))))
