@@ -79,33 +79,32 @@
 		    (if value value (error "Value missing for slot ~s" slot-name)))))))
 
 
-(define-layered-function process-values (class controls mapped
-					       &optional parenthesize)
+(define-layered-function process-values (class controls mapped &optional parenthesize)
   (:documentation "Values are collated, prepared and passed as args
 to be formatted. Mapped slots are refer to the mapping slot for value
 acquisition. Returns pg array string.")
 
   (:method
-      :in-layer db-layer ((class serialize) (controls cons) mapped
-			  &optional parenthesize)
+      :in-layer db-layer ((class serialize) (controls cons) mapped &optional parenthesize)
     (destructuring-bind (control slots) controls
       (setf slots (ensure-list slots))
       (apply #'format nil control
-	     (if mapped
-		 ;; one to many 
-		 (loop
-		   for mapping in mapped
-		   for mapping-node = (mapping-node mapping)
-		   for mapping-slot-name = (slot-definition-name (mapping-slot mapping))
-		   when (and (eq (class-of class) mapping-node)
-			     (slot-boundp class mapping-slot-name))
-		     collect (loop for value in (slot-value class mapping-slot-name)
-				   collect (prepare-value (mapped-column mapping) value parenthesize)))
-		 ;; one to one 
-		 (loop
-		   for slot in slots
-		   for slot-name = (slot-definition-name slot)
-		   collect (prepare-value slot (slot-value class slot-name) parenthesize)))))))
+	     (loop
+	       for slot in slots
+	       for slot-name = (slot-definition-name slot)
+	       collect (prepare-value slot (slot-value class slot-name) parenthesize)))))
+
+  (:method
+      :in-layer db-layer ((class serialize) (controls cons) (mapped slot-mapping) &optional parenthesize)
+    (destructuring-bind (control slots) controls
+      (setf slots (ensure-list slots))
+      (format nil control
+	      (let ((mapping-slot-name (slot-definition-name (mapping-slot mapped))))
+		(when (slot-boundp class mapping-slot-name)
+		  (loop
+		    for value in (slot-value class mapping-slot-name)
+		    collect (prepare-value (mapped-column mapped) value parenthesize))))))))
+
 
 
 (define-layered-function prepare-value (slot value &optional parenthesize)
