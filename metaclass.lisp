@@ -144,9 +144,8 @@ with a single column of type serial."))
 
 
 (define-layered-method initialize-in-context
-  :in db-interface-layer ((slot db-aggregate-slot-definition) slot-names
-							      &key maps-table maps-column maps-columns)
-  (declare (ignore slot-names))
+  :in db-interface-layer ((slot db-aggregate-slot-definition) 
+			  &key maps-table maps-column maps-columns)
   (with-slots (maps express-as-type) slot
     (let ((slot-name (slot-definition-name slot)))
 
@@ -167,14 +166,9 @@ with a single column of type serial."))
 
 
 
-;;(defmethod shared-initialize :after ((slot db-column-slot-definition) slot-names
-;;				     &key col-type table check primary-key referenced foreign-key &allow-other-keys)
-;;  (declare (ignore slot-names))
-
 (define-layered-method initialize-in-context
   :in db-table-layer ((slot db-column-slot-definition)
-		      slot-names &key col-type table check primary-key referenced foreign-key root-key &allow-other-keys)
-  (declare (ignore slot-names))
+		      &key col-type table check primary-key foreign-key root-key &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
 
     (flet ((process-primary-key ()
@@ -270,8 +264,7 @@ with a single column of type serial."))
 
 
 (define-layered-method initialize-in-context
-  :in db-interface-layer ((class db-wrap) slot-names &key &allow-other-keys)
-  (declare (ignore slot-names))
+  :in db-interface-layer ((class db-wrap) &key)
   (with-slots (root-key foreign-keys tables) class
 
     ;; Read relevant precedents into tables and each tables foreign-keys
