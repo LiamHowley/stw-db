@@ -1,23 +1,23 @@
 (in-package stw.db)
 
 
-(define-layered-function generate-component (class))
-
-
 (define-layered-class procedure
   :in db-layer ()
   ((schema :initarg :schema :accessor schema)
    (name :initarg :name :initform nil :accessor name)
    (args :initarg :args :initform nil :accessor args)
    (p-controls :initarg :controls :initform nil :accessor p-controls)
-   (p-values :initarg :values :initform nil :accessor p-values)
+   (p-control :initarg :p-control :initform nil :accessor p-control)
+   (relevant-slots :initarg :relevant-slots :initform nil :accessor relevant-slots)
    (vars :initarg :vars :initform nil :accessor vars)
    (sql-list :initarg :sql-list :initform nil :accessor sql-list)
-   (sql-statement :initarg :sql-statement :initform nil :reader sql-statement)))
+   (sql-statement :initarg :sql-statement :initform nil :reader sql-statement)
+   (table :initarg :table :reader table)))
 
-(define-layered-class table-proc
-  :in db-table-layer (procedure)
-  ((table :initarg :table :reader table)))
+
+(defmethod slot-unbound (class (instance procedure) (slot-name (eql 'p-values)))
+  (setf (slot-value instance slot-name) nil))
+
 
 (define-layered-method statement
   :in-layer db-layer ((class procedure))
@@ -46,6 +46,10 @@
 (defstruct var
   column var param)
 
+
+
+(define-layered-function generate-component (class))
+
 ;;; pg composite arrays - used in passing values to insert procedure calls
 
 (define-layered-function sql-typed-array (class)
@@ -65,19 +69,46 @@
 	 require-columns)))))
 
 
+;;; generating a procedure for insert/delete ops
+
+(define-layered-method generate-procedure
+  :in-layer db-layer
+  :around ((class serialize) component)
+  (let ((procedure (call-next-method)))
+    (set-control procedure)
+    (statement procedure)
+    procedure))
 
 
-(define-layered-function generate-procedure (class)
+(define-layered-function set-control (procedure)
+  (:method
+      :in db-layer ((procedure procedure))
+    (with-slots (schema name p-control p-controls) procedure
+      (setf p-control (format nil "CALL ~a.~a (~@[~{~a~^, ~}~])"
+			      schema name (mapcar #'(lambda (control)
+						      (cond ((and control (car control))
+							     (car control))
+							    (control "~a")
+							    (t "null")))
+						  p-controls)))))
+  (:method
+      :in update-node ((procedure procedure))
+    (with-slots (schema name p-control p-controls) procedure
+      (setf p-control (format nil "CALL ~a.~a (~@[~{~a~^, ~}~])"
+			      schema name (map-tree-depth-first #'stringp p-controls))))))
+
+
+(define-layered-function generate-procedure (class component)
 
   (:method
-      :in-layer db-table-layer ((class db-table-class))
-    (with-slots (schema table require-columns referenced-columns) class
-      (let ((procedure (make-instance 'table-proc
+      :in-layer db-table-layer ((class serialize) (component db-table-class))
+    (with-slots (schema table require-columns referenced-columns) component
+      (let ((procedure (make-instance 'procedure
 				      :schema schema
 				      :table class))
 	    (returns))
-	(with-slots (args vars sql-list p-controls) procedure
-	  (let ((component (the-component class)))
+	(with-slots (args vars sql-list p-controls relevant-slots) procedure
+	  (let ((component (generate-component component)))
 	    (with-slots (sql params param-controls declarations) component
 	      (loop
 		for declaration in declarations
@@ -94,6 +125,29 @@
 					 collect i))
 			       ,@returns)
 		    args params
-		    p-controls param-controls))))
+		    p-controls param-controls
+		    relevant-slots (get-relevant-slots class procedure)))))
 	procedure))))
 
+
+(define-layered-function get-relevant-slots (class procedure)
+  (:method
+      :in db-layer ((class serialize) (proc procedure))
+    (with-slots (p-controls) proc
+      (mapcar #'(lambda (control)
+		  (when control
+		    (if (consp (cadr control))
+			(loop
+			  for slot in (cadr control)
+			  for mapped-by = (match-mapping-node (class-of class) slot)
+			  if mapped-by
+			    collect (slot-value mapped-by 'mapping-slot)
+			  else
+			    collect slot)
+			(aif (slot-value (cadr control) 'mapped-by)
+			     (loop
+			       for mapping in self
+			       when (typep class (slot-value mapping 'mapping-node))
+				 do (return mapping))
+			     (cadr control)))))
+	      p-controls))))

@@ -1,60 +1,59 @@
 (in-package stw.db)
 
 
-(define-layered-method error-handler
-  :in insert ((class serialize) (procedure procedure) (err database-error) component)
-  (let* ((base-class (class-of class))
-	 (schema (slot-value base-class 'schema))
-	 (class-name (db-syntax-prep (class-name base-class))))
-    (flet ((respond (proc-name &rest functions)
-	     (multiple-value-bind (statement procedure)
-		 (apply #'build-db-component
-			(if component component base-class)
-			proc-name functions)
-	       (exec-query *db* statement)
-	       (exec-query *db* (call-statement procedure)))
-	     (insert class component)))
-      ;; in theory at least this should be safe from infinitely recursive
-      ;; loops as the dispatch statement and procedure are both generated
-      ;; by reference to the same object.
-      (scase (database-error-code err)
-	     ("3F000"
-	      ;; MISSING SCHEMA
-	      ;; Response: Create schema and recurse
-	      (exec-query *db* (create-schema schema))
-	      (exec-query *db* (set-schema schema))
-	      (insert class component))
-	     ("42704"
-	      ;; MISSING TYPE
-	      ;; Response: Create types for all relevant
-	      ;; table inserts. 
-	      (let ((proc-name (format nil "initialize_~a_types" class-name)))
-		(respond proc-name #'create-pg-composite #'create-typed-domain)))
-	     ("42P01"
-	      ;; MISSING TABLE OR TYPE IN DB.
-	      ;; Response: rebuild database component and
-	      ;; (re)initialize database.
-	      ;; Note: An effective way to build a database is to
-	      ;; let an insert fail and thus invoke this response.
-	      (let ((proc-name (format nil "initialize_~a_relations" class-name)))
-		(respond proc-name #'create-statement #'foreign-keys-statements #'index-statement)))
-	     ("42883"
-	      ;; MISSING INSERT PROCEDURE
-	      ;; Response: Make procedure and recurse.
-	      (make-sql-statement class procedure)
-	      (exec-query *db* (sql-statement procedure))
-	      (insert class component))
-	     (t (error err))))))
+(define-layered-method generate-procedure
+  :in-layer insert-table
+  ((class serialize) (component db-table-class))
+  (let ((procedure (call-next-method)))
+    (setf (slot-value procedure 'name)
+	  (format nil "~(~a~)_insert" 
+		  (db-syntax-prep (class-name component))))
+    procedure))
 
 
 (define-layered-method generate-procedure
-  :in-layer insert-table
-  :around ((class db-table-class))
-  (let ((procedure (call-next-method)))
-    (setf (slot-value procedure 'name)
-	  (format nil "~(~a~)_insert" (db-syntax-prep (class-name class))))
-    (statement procedure)
-    procedure))
+  :in-layer insert-node ((class serialize) component)
+  (declare (ignore component))
+  (let* ((base-class (class-of class))
+	 (components (generate-components base-class))
+	 (tables (include-tables class))
+	 (schema (slot-value base-class 'schema))
+	 (procedure (make-instance 'procedure
+				   :schema schema
+				   :name (format nil "~a_insert" (db-syntax-prep (class-name base-class))))))
+    (with-slots (name args vars sql-list sql-statement p-controls relevant-slots) procedure
+      (setf schema (slot-value base-class 'schema))
+      (let (returns)
+	(loop
+	  with num = 0
+	  for table in tables
+	  do (with-slots (sql declarations params param-controls)
+		 (gethash table components)
+	       (loop
+		 for declaration in declarations
+		 for var = (var-var declaration)
+		 do (push var vars)
+		 do (pushnew (var-param declaration) params :test #'equal)
+		 do (pushnew (format nil "~a := ~a;" (var-column declaration) (car var)) returns
+			     :test #'equal))
+	       (push param-controls p-controls)
+	       (cond (params
+		      (typecase (car params)
+			(cons
+			 (loop
+			   for param in params
+			   do (push param args))
+			 (push (format nil sql (incf num)) sql-list))
+			(atom
+			 (push params args)
+			 (push (format nil sql (incf num)) sql-list))))
+		     (t (push sql sql-list)))))
+	(setf args (nreverse args)
+	      p-controls (nreverse p-controls)
+	      relevant-slots (get-relevant-slots class procedure)
+	      sql-list (nconc (nreverse sql-list) returns)
+	      vars (nreverse vars)))
+      procedure)))
 
 
 (define-layered-method generate-component
@@ -68,9 +67,9 @@
 	if (member slot require-columns :test #'equality)
 	  collect column-name into required-columns
 	else
-	  collect (list :in column-name column-type) into args
+	  collect (list :in (format nil "insert_~a" column-name) column-type) into args
 	  and collect "$~a" into select
-	  and collect `(nil ,slot) into p-controls
+	  and collect `("~a" ,slot) into p-controls
 	collect column-name into columns
 	finally (return
 		  (make-component
@@ -78,37 +77,37 @@
 				"INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} from unnest($~~a);"
 				(set-sql-name schema table)
 				columns
-				(nconc select required-columns))
+				(nconc required-columns select))
 		   :params `(,@args (:in ,type-array nil))
 		   :param-controls `(,@p-controls ,(sql-typed-array class))))))))
 
 
-(define-layered-method insert-component
+(define-layered-method generate-component
   :in insert-table ((class db-key-table))
   (nth-value 1 (generate-components class)))
 
 
-(define-layered-function include-tables (class)
-  (:documentation "Included tables must be either:
-1. have required-columns that are bound and not null, or
-2. have no required columns.")
+(define-layered-function include-tables (class))
 
-  (:method
-      :in db-interface-layer ((class serialize))
-    (let ((tables (slot-value (class-of class) 'tables)))
-      (loop
-	with num = 0
-	for table in tables
-	for required = (require-columns (find-class table))
-	for include-table = (cond ((and required
-					(loop
-					  for slot in required
-					  always (slot-to-go class slot)))
-				   t)
-				  (required nil)
-				  (t t))
-	when include-table
-	  collect table))))
+(define-layered-method include-tables
+  :in insert-node ((class serialize))
+  "Included tables must be either:
+1. have required-columns that are bound and not null, or
+2. have no required columns."
+  (let ((tables (slot-value (class-of class) 'tables)))
+    (loop
+      with num = 0
+      for table in tables
+      for required = (require-columns (find-class table))
+      for include-table = (cond ((and required
+				      (loop
+					for slot in required
+					always (slot-to-go class slot)))
+				 t)
+				(required nil)
+				(t t))
+      when include-table
+	collect table)))
 				
 
 
@@ -140,78 +139,6 @@ and not null. Returns a boolean.")
 
 
 
-(define-layered-method dispatch-statement 
-  :in-layer insert :around ((class serialize) (procedure procedure))
-  (declare (ignore class))
-  (setf (slot-value procedure 'name)
-	(format nil "~(~a~)_insert"
-		(db-syntax-prep (class-name (class-of class)))))
-  (call-next-method))
-
-(define-layered-method dispatch-statement
-  :in-layer insert-node ((class serialize) (procedure procedure))
-  (let* ((base-class (class-of class))
-	 (components (generate-components base-class))
-	 (tables (include-tables class)))
-    (loop
-      with declared-vars = nil
-      for table in tables
-      for param-control = (slot-value (gethash table components) 'param-controls)
-      for declarations = (slot-value (gethash table components) 'declarations)
-      for mapped-table = (slot-value (find-class table) 'mapped-by)
-      when declarations
-	do (loop
-	     for declaration in declarations
-	     do (push "null" declared-vars))
-      when (or param-control mapped-table)
-	collect (process-values class param-control mapped-table) into params
-      finally (return (nconc declared-vars params)))))
-
-
-
-(define-layered-method make-sql-statement
-  :in-layer insert-node ((class serialize) (procedure procedure) &optional (tables (include-tables class)))
-  (let* ((base-class (class-of class))
-	 (components (generate-components base-class)))
-    (with-slots (schema args vars sql-list sql-statement) procedure
-      (setf schema (slot-value base-class 'schema))
-      (let ((returns))
-	(loop
-	  with num = 0
-	  for table in tables
-	  do (with-slots (sql declarations params)
-		 (gethash table components)
-	       (loop
-		 for declaration in declarations
-		 for var = (var-var declaration)
-		 do (push var vars)
-		 do (pushnew (var-param declaration) params :test #'equal)
-		 do (pushnew (format nil "~a := ~a;" (var-column declaration) (car var)) returns
-			     :test #'equal))
-	       (cond (params
-		      (typecase (car params)
-			(cons
-			 (loop
-			   for param in params
-			   do (push param args))
-			 (push (format nil sql (incf num)) sql-list))
-			(atom
-			 (push params args)
-			 (push (format nil sql (incf num)) sql-list))))
-		     (t (push sql sql-list)))))
-	(setf args (nreverse args)
-	      sql-list (nconc (nreverse sql-list) returns)
-	      vars (nreverse vars)))
-      (statement procedure))))
-
-(define-layered-method make-sql-statement
-  :in-layer insert-table ((class serialize) (procedure procedure) &optional tables)
-  (declare (ignore class tables))
-  procedure)
-
-
-
-
 (defun declared-var (table column-name col-type)
   (let ((col-type (if (eq col-type :serial) :integer col-type))
 	(column (format nil "_~a" column-name)))
@@ -221,15 +148,6 @@ and not null. Returns a boolean.")
 		(if (eq col-type :serial) :integer col-type)
 		nil)
      :param (list :out column col-type))))
-
-
-(defvar *components* (make-hash-table :test #'equal))
-
-(clrhash *components*)
-
-(declaim (notinline generate-components))
-
-(unmemoize 'generate-components)
 
 
 (define-layered-function generate-components (class)
@@ -320,6 +238,3 @@ with the key value pair, class-name => COMPONENT. Results are cached.")
 		    (list :in (format nil "~a_type[]" (set-sql-name schema table)) nil))
 	  :param-controls (when vars
 			    (sql-typed-array class))))))))
-
-
-(memoize 'generate-components :table *components*)

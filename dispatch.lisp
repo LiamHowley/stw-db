@@ -1,9 +1,78 @@
 (in-package stw.db)
 
+(define-layered-function (setf proc-template) (new-value class component))
 
-(define-layered-function make-sql-statement (class procedure &optional tables))
+(define-layered-function proc-template (class component)
+  (:method
+      :in db-layer :around ((class serialize) component)
+    (multiple-value-bind (procedure existsp)
+	(call-next-method)
+	(when (and existsp procedure)
+	    procedure))))
 
-(define-layered-function error-handler (class procedure error component))
+
+(define-layered-method proc-template
+  :in-layer db-op ((class serialize) component)
+  (declare (ignore component))
+  (gethash (nth-value 1 (slots-with-values class)) (db-template-register)))
+
+(define-layered-method (setf proc-template)
+  :in-layer db-op ((new-value procedure) (class serialize) component)
+  (declare (ignore component))
+  (let ((key (nth-value 1 (slots-with-values class))))
+    (setf (gethash key (db-template-register)) new-value)))
+
+(define-layered-method proc-template
+  :in-layer db-op ((class serialize) (component db-table-class))
+  (declare (ignore class))
+  (gethash (class-name component) (db-template-register)))
+
+(define-layered-method (setf proc-template)
+  :in-layer db-op ((new-value procedure) (class serialize) (component db-table-class))
+  (declare (ignore class))
+  (let ((key (class-name component)))
+    (setf (gethash key (db-template-register)) new-value)))
+
+
+(define-layered-function db-template-register ()
+  (:method
+      :in-layer insert ()
+    (template-register (contextl:find-layer 'insert)))
+  (:method
+      :in-layer delete-from ()
+    (template-register (contextl:find-layer 'delete-from)))
+  (:method
+      :in-layer update ()
+    (template-register (contextl:find-layer 'update)))
+  (:method
+      :in-layer retrieve ()
+    (template-register (contextl:find-layer 'retrieve))))
+
+
+(define-layered-function dispatch-statement (class procedure)
+  (:method
+      :in db-layer ((class serialize) (procedure procedure))
+    (with-slots (p-control relevant-slots) procedure
+      (apply #'format nil p-control
+	     (nreverse
+	      (labels ((walk (inner &optional acc parenthesize)
+			 (cond ((null inner)
+				acc)
+			       ((atom inner)
+				(let ((result (prepare-value inner (slot-value class (slot-definition-name inner)) parenthesize)))
+				  (cond (result
+					 (cons result acc))
+					(t acc))))
+			       (t (walk (cdr inner) (walk (car inner) acc (parenthesize inner)))))))
+		(walk relevant-slots)))))))
+
+
+(define-layered-function parenthesize (slots)
+  (:method
+      :in db-layer ((slots cons))
+    (unless (> (length slots) 1)
+      t)))
+
 
 (define-layered-function read-row-to-class (class)
 
@@ -25,8 +94,9 @@
 
 (define-layered-function execute (class component)
 
-  (:method 
-      :in-layer db-layer :around ((class serialize) component)
+  (:method
+      :in-layer db-layer
+      :around ((class serialize) component)
     (multiple-value-bind (statement procedure)
 	(call-next-method)
       (handler-case (exec-query *db* statement (read-row-to-class class))
@@ -36,19 +106,59 @@
 
   (:method
       :in-layer db-layer ((class serialize) component)
-    (let* ((base-class (class-of class))
-	   (schema (slot-value base-class 'schema))
-	   (procedure (make-instance 'procedure :schema schema)))
-      (values
-       (dispatch-statement class procedure)
-       procedure)))
+    (values (or (proc-template class component)
+		(setf (proc-template class component) (generate-procedure class component)))
+	    (dispatch-statement class procedure))))
+
+
+(define-layered-function error-handler (class procedure error component)
 
   (:method
-      :in-layer db-layer ((class serialize) (component db-table-class))
-    (let ((procedure (memoized-funcall #'generate-procedure component)))
-      (values
-       (dispatch-statement class procedure)
-       procedure))))
+      :in db-layer ((class serialize) (procedure procedure) (err database-error) component)
+    (let* ((base-class (class-of class))
+	   (schema (slot-value base-class 'schema))
+	   (class-name (db-syntax-prep (class-name base-class))))
+      (labels ((exec (statement)
+		 (exec-query *db* statement))
+	       (respond (proc-name &rest functions)
+		 (multiple-value-bind (statement procedure)
+		     (apply #'build-db-component
+			    (if component component base-class)
+			    proc-name functions)
+		   (exec statement)
+		   (exec (call-statement procedure)))
+		 (execute class component)))
+	;; in theory at least this should be safe from infinitely recursive
+	;; loops as the dispatch statement and procedure are both generated
+	;; by reference to the same object.
+	(scase (database-error-code err)
+	       ("3F000"
+		;; MISSING SCHEMA
+		;; Response: Create schema and recurse
+		(exec (create-schema schema))
+		(exec (set-schema schema))
+		(execute class component))
+	       ("42704"
+		;; MISSING TYPE
+		;; Response: Create types for all relevant
+		;; table inserts. 
+		(let ((proc-name (format nil "initialize_~(~a~)_types" class-name)))
+		  (respond proc-name #'create-pg-composite #'create-typed-domain)))
+	       ("42P01"
+		;; MISSING TABLE OR TYPE IN DB.
+		;; Response: rebuild database component and
+		;; (re)initialize database.
+		;; Note: An effective way to build a database is to
+		;; let an insert fail and thus invoke this response.
+		(let ((proc-name (format nil "initialize_~(~a~)_relations" class-name)))
+		  (respond proc-name #'create-statement #'foreign-keys-statements #'index-statement)))
+	       ("42883"
+		;; MISSING INSERT PROCEDURE
+		;; Response: Make procedure and recurse.
+		(exec (sql-statement procedure))
+		(execute class component))
+	       (t (error err)))))))
+
 
 
 (define-layered-function match-mapping-node (class table)
@@ -57,77 +167,16 @@
 of SLOT-MAPPING.")
 
   (:method
-    :in-layer db-interface-layer ((class db-interface-class) (table db-table-class))
+    :in-layer db-layer ((class db-interface-class) table)
     (loop
       for mapping in (slot-value table 'mapped-by)
       when (eq (mapping-node mapping) class)
 	do (return mapping))))
 
 
-(define-layered-function dispatch-statement (class procedure)
-
-  (:method
-      :in-layer db-layer :around ((class serialize) (procedure procedure))
-    (with-slots (name schema p-values) procedure
-      (setf schema (slot-value (class-of class) 'schema)
-	    p-values (call-next-layered-method))
-      (call-statement procedure)))
-
-  (:method
-      :in-layer db-table-layer ((class serialize) (procedure procedure))
-    (with-slots (p-controls table) procedure
-      (loop
-	with mapped-by = (slot-value table 'mapped-by)
-	for control in p-controls
-	if (car control)
-	  collect (process-values class control mapped-by)
-	else
-	  collect (let* ((slot (cadr control))
-			 (slot-name (slot-definition-name slot))
-			 (value (prepare-value slot (when (slot-boundp class slot-name)
-						      (slot-value class slot-name)))))
-		    (if value value (error "Value missing for slot ~s" slot-name)))))))
-
-
-(define-layered-function process-values (class controls mapped &optional parenthesize)
-  (:documentation "Values are collated, prepared and passed as args
-to be formatted. Mapped slots are refer to the mapping slot for value
-acquisition. Returns pg array string.")
-
-  (:method
-      :in-layer db-layer 
-      :around ((class serialize) (controls cons) mapped &optional parenthesize)
-    (let ((slots (ensure-list (cadr controls))))
-      (call-next-layered-method class controls mapped (or parenthesize
-							  (unless (> (length slots) 1)
-							    t)))))
-
-  (:method
-      :in-layer db-layer ((class serialize) (controls cons) mapped &optional parenthesize)
-    (destructuring-bind (control slots) controls
-      (setf slots (ensure-list slots))
-      (apply #'format nil control
-	     (loop
-	       for slot in slots
-	       for slot-name = (slot-definition-name slot)
-	       collect (prepare-value slot (slot-value class slot-name) parenthesize)))))
-
-  (:method
-      :in-layer db-layer ((class serialize) (controls cons) (mapped slot-mapping) &optional parenthesize)
-    (destructuring-bind (control slots) controls
-      (setf slots (ensure-list slots))
-      (format nil control
-	      (let ((mapping-slot-name (slot-definition-name (mapping-slot mapped))))
-		(when (slot-boundp class mapping-slot-name)
-		  (loop
-		    for value in (slot-value class mapping-slot-name)
-		    collect (prepare-value (mapped-column mapped) value parenthesize))))))))
-
-
-
 (define-layered-function prepare-value (slot value &optional parenthesize)
   (:method
-    :in db-layer ((slot db-column-slot-definition) value &optional parenthesize)
+      :in db-layer ((slot db-column-slot-definition) value &optional parenthesize)
     (with-slots (col-type default not-null) slot
       (cond (value
 	     (case col-type
@@ -142,4 +191,12 @@ acquisition. Returns pg array string.")
 	    ((and not-null default (eq col-type :boolean))
 	     "'f'")
 	    (default
-	     "null")))))
+	     "null"))))
+
+  (:method
+      :in db-layer ((slot db-aggregate-slot-definition) values &optional parenthesize)
+    (with-slots (maps) slot
+      (loop
+	with column = (mapped-column maps)
+	for value in values
+	collect (prepare-value column value parenthesize)))))

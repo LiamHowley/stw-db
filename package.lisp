@@ -12,7 +12,9 @@
 		:with-gensyms
 		:map-tree-depth-first
 		:ordered-plist-values
-		:ensure-list)
+		:ensure-list
+		:flatten
+		:number-range)
   (:import-from :stw.meta
 		:with-context
 		:define-base-class
@@ -25,9 +27,13 @@
 		:slot-definition-class
 		:initialize-in-context
 		:find-slot-definition
+		:map-filtered-slots
 		:filter-slots-by-type
 		:filter-precedents-by-type
-		:clone-object)
+		:object-to-plist
+		:slots-with-values
+		:clone-object
+		:equality)
   (:import-from :contextl
 		:defdynamic
 		:dynamic
@@ -66,10 +72,6 @@
 		:implementation-not-supported
 		:atomic-pop
 		:atomic-push)
-  (:import-from :fare-memoization
-		:memoized-funcall
-		:memoize
-		:unmemoize)
   (:import-from :bordeaux-threads
   		:make-lock
   		:with-lock-held)

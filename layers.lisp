@@ -21,6 +21,8 @@
   ()
   (:metaclass stw-db-context))
 
+
+
 (define-layered-method adjoin-layer-using-class
   :in-layer db-layer ((layer stw-layer-context) active-layers)
   ;; on layer activation deactivate other layers of the same layer type
@@ -33,13 +35,31 @@
 
 ;; database operations contexts
 
-(deflayer insert)
+(deflayer db-op)
 
-(deflayer delete-from)
+(deflayer insert (db-op)
+  ((template-register
+    :initarg :register-template
+    :initform (make-hash-table :test #'equal)
+    :reader template-register)))
 
-(deflayer update)
+(deflayer delete-from (db-op)
+  ((template-register
+    :initarg :register-template
+    :initform (make-hash-table :test #'eq)
+    :reader template-register)))
 
-(deflayer retrieve)
+(deflayer update (db-op)
+  ((template-register
+    :initarg :register-template
+    :initform (make-hash-table :test #'equal)
+    :reader template-register)))
+
+(deflayer retrieve (db-op)
+  ((template-register
+    :initarg :register-template
+    :initform (make-hash-table :test #'equal)
+    :reader template-register)))
 
 
 ;; create interface-node layer contexts for database operations
