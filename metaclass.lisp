@@ -1,10 +1,14 @@
 (in-package stw.db)
 
 
+(define-layered-class db-class
+  :in db-layer (base-class)
+  ())
+
 ;;; DB-INTERFACE-LAYER metaclasses
 
 (define-layered-class db-wrap
-  :in db-interface-layer (base-class)
+  :in db-interface-layer (db-class)
   ((schema
     :initarg :schema
     :reader schema)
@@ -63,7 +67,7 @@ Set as alist ((COLUMN . VALUE))")))
 ;;; DB-TABLE-LAYER metaclasses
 
 (define-layered-class db
-  :in db-table-layer (singleton-class base-class)
+  :in db-table-layer (singleton-class db-class)
   ((schema :initarg :schema :initform "public" :reader schema :type string)
    (table :initarg :table :initform nil :reader table :type string)
    (primary-keys :initarg :primary-keys :initform nil :accessor primary-keys :type (null cons))
