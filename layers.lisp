@@ -79,10 +79,6 @@
   ()
   (:metaclass stw-table))
 
-(deflayer update-table (update db-table-layer)
-  ()
-  (:metaclass stw-table))
-
 (deflayer retrieve-table (retrieve db-table-layer)
   ()
   (:metaclass stw-table))
