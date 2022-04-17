@@ -74,17 +74,6 @@ Environment parameters are accessed within DB-CONNECT and the resulting connecti
 	     (unwind-protect (progn ,@body)
 	       (close-connection *db* ,pool))))))))
 
-(defmacro db-update-node (env node &body body)
-  "Wrapper for DB-CONNECT using the DB-UPDATE-NODE-LAYER."
-  `(db-connect ,env (update-node)
-     (let ((original (clone-object ,node)))
-       ,@body)))
-
-(defmacro db-update-table (env node &body body)
-  "Wrapper for DB-CONNECT using the DB-UPDATE-NODE-LAYER."
-  `(db-connect ,env (update-table)
-     (let ((original (clone-object ,node)))
-       ,@body)))
 
 
 ;;(define-db-environment db
