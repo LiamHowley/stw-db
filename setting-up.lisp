@@ -232,7 +232,7 @@ multiple records in a one-to-many relationship.")
 
 
 (define-layered-function create-typed-domain (class)
-    (:documentation "Creates explicit domains associated with respective columns.
+  (:documentation "Creates explicit domains associated with respective columns.
 As domains are typed they are useful to generate dynamic overloaded sql procedures
 so that differing columns of the same type can be applied to a procedure call.")
 
@@ -241,10 +241,8 @@ so that differing columns of the same type can be applied to a procedure call.")
     (with-slots (tables) class
       (loop
 	for table in tables
-	for required = (require-columns (find-class table))
-	for domain = (when required
-		       (with-active-layers (db-table-layer)
-			 (create-typed-domain (find-class table))))
+	for domain = (with-active-layers (db-table-layer)
+		       (create-typed-domain (find-class table)))
 	when domain
 	collect domain)))
 
@@ -252,11 +250,14 @@ so that differing columns of the same type can be applied to a procedure call.")
       :in db-table-layer ((class db-table-class)) 
     (with-slots (domain schema table require-columns) class
       (format nil "~{~a~}"
-	      (loop
-		for column in require-columns
-		collect (with-slots (domain col-type) column
-			  (format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE DOMAIN ~a.~a AS ~a; END IF;"
-				  domain schema domain col-type)))))))
+	      (let ((columns (filter-slots-by-type class 'db-column-slot-definition)))
+		(loop
+		  for column in columns
+		  collect (with-slots (domain col-type) column
+			    (format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE DOMAIN ~a.~a AS ~a; END IF;"
+				    domain schema domain (if (eq col-type :serial)
+							     :integer
+							     col-type)))))))))
     
 
 ;;; setting up
