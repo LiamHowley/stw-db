@@ -15,10 +15,6 @@
    (table :initarg :table :reader table)))
 
 
-(defmethod slot-unbound (class (instance procedure) (slot-name (eql 'p-values)))
-  (setf (slot-value instance slot-name) nil))
-
-
 (define-layered-method statement
   :in-layer db-layer ((class procedure))
   (with-slots (schema name args vars sql-list sql-statement) class
@@ -29,12 +25,6 @@
 		  (format nil "~@[DECLARE~%~{~{~a ~a~@[ := ~a~];~}~%~}~]" vars)
 		  (format nil "~{~a~^~%~}" sql-list)))
     class))
-
-(define-layered-function call-statement (class)
-  (:method 
-      :in-layer db-layer ((class procedure))
-    (with-slots (schema name p-values) class
-      (format nil "CALL ~a.~a (~@[~{~a~^, ~}~])" schema name p-values))))
 
 
 (defstruct component
