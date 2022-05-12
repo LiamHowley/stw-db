@@ -39,7 +39,8 @@
   ((maps
     :initarg :maps-table
     :initarg :maps-column
-    :initarg :maps-columns)
+    :initarg :maps-columns
+    :reader maps)
    (express-as-type
     :initarg :express-as-type
     :initform nil
@@ -84,7 +85,7 @@ Set as alist ((COLUMN . VALUE))")))
 
 
 (defclass db-column-slot-definition (db-base-column-definition)
-  ((schema :initform nil :type string)
+  ((schema :initform nil :type string :reader schema)
    (table-class :initform nil :reader table-class)
    (table :initarg :table :initform nil :reader table)
    (col-type :initarg :col-type :initform :text :reader col-type :type keyword)

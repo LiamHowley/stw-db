@@ -230,7 +230,6 @@ multiple records in a one-to-many relationship.")
 
 ;;; create domain
 
-
 (define-layered-function create-typed-domain (class)
   (:documentation "Creates explicit domains associated with respective columns.
 As domains are typed they are useful to generate dynamic overloaded sql procedures
