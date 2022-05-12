@@ -14,6 +14,7 @@
 		 (:file "setting-up")
 		 (:file "tearing-down")
 		 (:file "procedure")
+		 (:file "function")
 		 (:file "dispatch")
 		 (:file "insert")
 		 (:file "delete")
