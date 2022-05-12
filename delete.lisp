@@ -1,15 +1,8 @@
 (in-package stw.db)
 
-(define-layered-method proc-template
-  :in-layer delete-from ((class serialize) component)
-  (declare (ignore component))
-  (gethash (class-name (class-of class)) (db-template-register)))
-
-(define-layered-method (setf proc-template)
-  :in-layer delete-from ((new-value procedure) (class serialize) component)
-  (declare (ignore component))
-  (let ((key (class-name (class-of class))))
-    (setf (gethash key (db-template-register)) new-value)))
+(define-layered-method get-key
+  :in delete-from ((class serialize) component &rest rest &key)
+(class-name (class-of class)))
 
 
 (define-layered-method read-row-to-class

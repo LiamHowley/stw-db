@@ -1,37 +1,38 @@
 (in-package stw.db)
 
-(define-layered-function (setf proc-template) (new-value class component))
 
-(define-layered-function proc-template (class component)
+(define-layered-function (setf proc-template) (new-value class component &rest rest &key &allow-other-keys)
+
   (:method
-      :in db-layer :around ((class serialize) component)
+      :in-layer db-op ((new-value procedure) (class serialize) component &rest rest &key &allow-other-keys)
+    (let ((key (apply #'get-key class component rest)))
+      (setf (gethash key (db-template-register)) new-value))))
+
+(define-layered-function proc-template (class component &rest rest &key &allow-other-keys)
+
+  (:method
+      :in db-layer :around ((class serialize) component &rest rest &key &allow-other-keys)
     (multiple-value-bind (procedure existsp)
 	(call-next-method)
-	(when (and existsp procedure)
-	    procedure))))
+      (when (and existsp procedure)
+	procedure)))
+
+  (:method
+      :in-layer db-op ((class serialize) component &rest rest &key &allow-other-keys)
+    (gethash (apply #'get-key class component rest) (db-template-register))))
 
 
-(define-layered-method proc-template
-  :in-layer db-op ((class serialize) component)
-  (declare (ignore component))
-  (gethash (nth-value 1 (slots-with-values class)) (db-template-register)))
 
-(define-layered-method (setf proc-template)
-  :in-layer db-op ((new-value procedure) (class serialize) component)
-  (declare (ignore component))
-  (let ((key (nth-value 1 (slots-with-values class))))
-    (setf (gethash key (db-template-register)) new-value)))
+(define-layered-function get-key (class component &rest rest &key &allow-other-keys))
 
-(define-layered-method proc-template
-  :in-layer db-op ((class serialize) (component db-table-class))
-  (declare (ignore class))
-  (gethash (class-name component) (db-template-register)))
+(define-layered-method get-key
+  :in db-op ((class serialize) component &rest rest &key)
+  (nth-value 1 (slots-with-values class)))
 
-(define-layered-method (setf proc-template)
-  :in-layer db-op ((new-value procedure) (class serialize) (component db-table-class))
-  (declare (ignore class))
-  (let ((key (class-name component)))
-    (setf (gethash key (db-template-register)) new-value)))
+(define-layered-method get-key
+  :in db-op ((class serialize) (component db-table-class) &rest rest &key)
+  (class-name component))
+
 
 
 (define-layered-function db-template-register ()

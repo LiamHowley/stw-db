@@ -1,33 +1,25 @@
 (in-package stw.db)
 
 
-(define-layered-function update-key (old new)
-  (:method
-      :in update-node ((old serialize) (new serialize))
-    (loop
-      for slot in (filter-slots-by-type base-class 'db-base-column-definition) 
-      for slot-name = (slot-definition-name slot)
-      for old-value = (when (slot-boundp old slot-name)
-			(slot-value old slot-name))
-      for new-value = (when (slot-boundp new slot-name)
-			(slot-value new slot-name))
-      when old-value
-	collect slot-name into where 
-      when new-value
-	unless (equal new-value old-value)
-	  collect slot-name into set 
-      finally (return (list set where)))))
+(define-layered-method get-key
+  :in update-node ((old serialize) (new serialize) &rest rest &key)
+  (declare (ignore rest))
+  (loop
+    for slot in (filter-slots-by-type (class-of old) 'db-base-column-definition) 
+    for slot-name = (slot-definition-name slot)
+    for old-value = (when (slot-boundp old slot-name)
+		      (slot-value old slot-name))
+    for new-value = (when (slot-boundp new slot-name)
+		      (slot-value new slot-name))
+    when old-value
+      collect slot-name into where 
+    when new-value
+      unless (equal new-value old-value)
+	collect slot-name into set 
+    finally (return (list set where))))
       
 
-(define-layered-method proc-template
-  :in-layer update-node ((old serialize) (new serialize))
-  (let ((key (update-key old new)))
-    (gethash key (db-template-register))))
 
-(define-layered-method (setf proc-template)
-  :in-layer update-node ((new-value procedure) (old serialize) (new serialize))
-  (let ((key (update-key old new)))
-    (setf (gethash key (db-template-register)) new-value)))
 
 
 (define-layered-method execute 
