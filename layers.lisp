@@ -98,7 +98,3 @@
 (deflayer delete-table (delete-from db-table-layer)
   ()
   (:metaclass stw-table))
-
-(deflayer retrieve-table (retrieve db-table-layer)
-  ()
-  (:metaclass stw-table))
