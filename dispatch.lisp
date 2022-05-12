@@ -200,4 +200,69 @@ of SLOT-MAPPING.")
       (loop
 	with column = (mapped-column maps)
 	for value in values
-	collect (prepare-value column value parenthesize)))))
+	collect (prepare-value% column value parenthesize)))))
+
+
+
+(define-layered-function prepare-value (slot col-type value parenthesize)
+
+  (:method
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :boolean)) value parenthesize)
+    (declare (ignore slot col-type parenthesize))
+    (if (eq value t) "'t'" "'f'"))
+
+  (:method
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :text)) (value string) parenthesize)
+    (if parenthesize
+	(concatenate 'string "'(" value ")'")
+	(concatenate 'string "'" value "'")))
+
+  (:method
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :varchar)) (value string) parenthesize)
+    (prepare-value slot :text value parenthesize))
+
+  (:method
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :char)) (value string) parenthesize)
+    (prepare-value slot :text value parenthesize))
+
+
+  ;;; numeric
+  (:method
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :integer)) (value string) parenthesize)
+    (declare (ignore slot col-type parenthesize))
+    (parse-integer value))
+
+  (:method
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :integer)) (value float) parenthesize)
+    (declare (ignore slot col-type parenthesize))
+    (round value))
+
+  (:method
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :float)) (value integer) parenthesize)
+    (declare (ignore slot col-type parenthesize))
+    (float value))
+
+  (:method
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :float)) (value string) parenthesize)
+    (declare (ignore slot col-type parenthesize))
+    (float value))
+
+
+  (:method
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :array)) (value cons) parenthesize)
+    (declare (ignore slot col-type parenthesize))
+    (format nil "'{~{~s~^, ~}}'" value))
+
+  (:method
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :array)) (value array) parenthesize)
+    (prepare-value slot :array (array-to-list value) parenthesize))
+
+
+  ;;; the rest
+  (:method
+      :in db-layer ((slot db-column-slot-definition) col-type value parenthesize)
+    (declare (ignore col-type parenthesize))
+    (cond (value
+	   value)
+	  ((slot-valude slot 'default)
+	   "null"))))
