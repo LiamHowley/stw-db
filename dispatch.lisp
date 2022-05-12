@@ -8,6 +8,7 @@
     (let ((key (apply #'get-key class component rest)))
       (setf (gethash key (db-template-register)) new-value))))
 
+
 (define-layered-function proc-template (class component &rest rest &key &allow-other-keys)
 
   (:method
@@ -60,7 +61,7 @@
 			 (cond ((null inner)
 				acc)
 			       ((atom inner)
-				(let ((result (prepare-value inner (slot-value class (slot-definition-name inner)) parenthesize)))
+				(let ((result (prepare-value% inner (slot-value class (slot-definition-name inner)) parenthesize)))
 				  (cond (result
 					 (cons result acc))
 					(t acc))))
@@ -72,7 +73,10 @@
   (:method
       :in db-layer ((slots cons))
     (unless (> (length slots) 1)
-      t)))
+      t))
+  (:method
+    :in retrieve-node ((slots cons))
+    nil))
 
 
 (define-layered-function read-row-to-class (class)
@@ -85,81 +89,89 @@
 	(let ((base-class (class-of class)))
 	  (loop
 	    while (next-row)
+	    for i from 0
+	    for node = (if (eql i 0) class (make-instance (class-of class)))
 	    do (loop
 		 for field across fields
 		 for symbol-name = (get-symbol-name (field-name field))
 		 for slot-name = (intern symbol-name (symbol-package (class-name base-class)))
-		 when (find-slot-definition base-class slot-name 'db-column-slot-definition)
-		   do (setf (slot-value class slot-name) (next-field field)))))))))
+		 for slot = (find-slot-definition (class-of class) slot-name 'db-aggregate-slot-definition)
+		 do (let ((next-field (next-field field)))
+		      (unless (eq next-field :null)
+			(when (and next-field (find-slot-definition base-class slot-name 'db-base-column-definition)
+				   (setf (slot-value node slot-name)
+					 (if slot
+					     (let ((slot-type (slot-definition-type slot)))
+					       (if (or (eq slot-type 'list)
+						       (eq slot-type 'cons))
+						   (array-to-list next-field)
+						   next-field))
+					     next-field)))))))
+	    collect node into nodes
+	    finally (return (if (eql i 0) node nodes))))))))
 
 
-(define-layered-function execute (class component)
+
+(define-layered-function execute (class component &rest rest &key &allow-other-keys)
 
   (:method
       :in-layer db-layer
-      :around ((class serialize) component)
+      :around ((class serialize) component &rest rest &key)
     (multiple-value-bind (statement procedure)
 	(call-next-method)
       (handler-case (exec-query *db* statement (read-row-to-class class))
 	(database-error (err)
-	  (error-handler class procedure err component))))
-    class)
+	  (let* ((base-class (class-of class))
+		 (schema (slot-value base-class 'schema))
+		 (class-name (db-syntax-prep (class-name base-class))))
+	    (labels ((exec (statement)
+		       (exec-query *db* statement))
+		     (respond (proc-name &rest functions)
+		       (multiple-value-bind (statement procedure)
+			   (apply #'build-db-component
+				  (if component (if (typep component 'db-table-class)
+						    component
+						    (class-of component))
+				      base-class)
+				  proc-name
+				  functions)
+			 (exec statement)
+			 (exec (slot-value procedure 'p-control)))
+		       (apply #'execute class component rest)))
+	      (scase (database-error-code err)
+		     ("3F000"
+		      ;; MISSING SCHEMA
+		      ;; Response: Create schema and recurse
+		      (exec (create-schema schema))
+		      (exec (set-schema schema))
+		      (apply #'execute class component rest))
+		     ("42704"
+		      ;; MISSING TYPE
+		      ;; Response: Create types for all relevant
+		      ;; table inserts. 
+		      (let ((proc-name (format nil "initialize_~(~a~)_types" class-name)))
+			(respond proc-name #'create-pg-composite #'create-typed-domain)))
+		     ("42P01"
+		      ;; MISSING TABLE OR TYPE IN DB.
+		      ;; Response: rebuild database component and
+		      ;; (re)initialize database.
+		      ;; Note: An effective way to build a database is to
+		      ;; let an insert fail and thus invoke this response.
+		      (let ((proc-name (format nil "initialize_~(~a~)_relations" class-name)))
+			(respond proc-name #'create-statement #'foreign-keys-statements #'index-statement)))
+		     ("42883"
+		      ;; MISSING INSERT PROCEDURE
+		      ;; Response: Make procedure and recurse.
+		      (exec (sql-statement procedure))
+		      (apply #'execute class component rest))
+		     (t (error err)))))))))
 
   (:method
-      :in-layer db-layer ((class serialize) component)
-    (values (or (proc-template class component)
-		(setf (proc-template class component) (generate-procedure class component)))
-	    (dispatch-statement class procedure))))
-
-
-(define-layered-function error-handler (class procedure error component)
-
-  (:method
-      :in db-layer ((class serialize) (procedure procedure) (err database-error) component)
-    (let* ((base-class (class-of class))
-	   (schema (slot-value base-class 'schema))
-	   (class-name (db-syntax-prep (class-name base-class))))
-      (labels ((exec (statement)
-		 (exec-query *db* statement))
-	       (respond (proc-name &rest functions)
-		 (multiple-value-bind (statement procedure)
-		     (apply #'build-db-component
-			    (if component component base-class)
-			    proc-name functions)
-		   (exec statement)
-		   (exec (call-statement procedure)))
-		 (execute class component)))
-	;; in theory at least this should be safe from infinitely recursive
-	;; loops as the dispatch statement and procedure are both generated
-	;; by reference to the same object.
-	(scase (database-error-code err)
-	       ("3F000"
-		;; MISSING SCHEMA
-		;; Response: Create schema and recurse
-		(exec (create-schema schema))
-		(exec (set-schema schema))
-		(execute class component))
-	       ("42704"
-		;; MISSING TYPE
-		;; Response: Create types for all relevant
-		;; table inserts. 
-		(let ((proc-name (format nil "initialize_~(~a~)_types" class-name)))
-		  (respond proc-name #'create-pg-composite #'create-typed-domain)))
-	       ("42P01"
-		;; MISSING TABLE OR TYPE IN DB.
-		;; Response: rebuild database component and
-		;; (re)initialize database.
-		;; Note: An effective way to build a database is to
-		;; let an insert fail and thus invoke this response.
-		(let ((proc-name (format nil "initialize_~(~a~)_relations" class-name)))
-		  (respond proc-name #'create-statement #'foreign-keys-statements #'index-statement)))
-	       ("42883"
-		;; MISSING INSERT PROCEDURE
-		;; Response: Make procedure and recurse.
-		(exec (sql-statement procedure))
-		(execute class component))
-	       (t (error err)))))))
-
+      :in-layer db-layer ((class serialize) component &rest rest &key &allow-other-keys)
+    (let ((procedure (or (apply #'proc-template class component rest)
+			 (setf (apply #'proc-template class component rest) (apply #'generate-procedure class component rest)))))
+      (values (dispatch-statement class procedure)
+	      procedure))))
 
 
 (define-layered-function match-mapping-node (class table)
@@ -175,24 +187,25 @@ of SLOT-MAPPING.")
 	do (return mapping))))
 
 
-(define-layered-function prepare-value (slot value &optional parenthesize)
+(define-layered-function prepare-value% (slot value &optional parenthesize)
   (:method
       :in db-layer ((slot db-column-slot-definition) value &optional parenthesize)
     (with-slots (col-type default not-null) slot
-      (cond (value
-	     (case col-type
-	       (:boolean
-		(if (eq value t) "'t'" "'f'"))
-	       ((:text :varchar)
-		(if parenthesize
-		    (concatenate 'string "'(" value ")'")
-		    (concatenate 'string "'" value "'")))
-	       (t
-		value)))
-	    ((and not-null default (eq col-type :boolean))
-	     "'f'")
-	    (default
-	     "null"))))
+      (let ((col-type (if (consp col-type)
+			  (car col-type)
+			  col-type)))
+	(setf col-type
+	      (case col-type
+		((:boolean :bool)
+		 :boolean)
+		((:text :varchar :char)
+		 :text)
+		((:integer :small-int :big-int :int :int4 :int8 :int2)
+		 :integer)
+		((:float :float8 :float4 :real :numeric :decimal)
+		 :float)
+		(t col-type)))
+      (prepare-value slot col-type value parenthesize))))
 
   (:method
       :in db-layer ((slot db-aggregate-slot-definition) values &optional parenthesize)

@@ -153,7 +153,7 @@
 
 (define-interface-node account
   (user user-account user-name user-handle user-url)
-  ((sites :maps-table user-site :maps-column site)))
+  ((sites :maps-table user-site :maps-column site :type list)))
 
 
 

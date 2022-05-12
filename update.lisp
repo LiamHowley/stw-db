@@ -20,17 +20,53 @@
       
 
 
+(define-layered-method read-row-to-class 
+  :in-layer update-node ((class serialize))
+  (flet ((process-fields (field next-field)
+	   (let* ((base-class (class-of class))
+		  (pos (search "_" field))
+		  (symbol-name (string-upcase (substitute #\- #\_ (subseq field (1+ pos)))))
+		  (slot-name (intern symbol-name (symbol-package (class-name base-class)))))
+	     (scase (subseq field 0 pos)
+		    ("set"
+		     (when (find-slot-definition base-class slot-name 'db-column-slot-definition)
+		       (setf (slot-value class slot-name) next-field)))
+		    ("insert"
+		     (awhen (find-slot-definition base-class slot-name 'db-aggregate-slot-definition)
+		       (let ((list (explode-string next-field '("{(" "),(" ")}") :remove-separators t)))
+			 (loop
+			   for value in list
+			   do (case (slot-definition-type self)
+				(array
+				 (vector-push-extend value (slot-value class slot-name)))
+				(t
+				 (push value (slot-value class slot-name))))))))
+		    ("delete"
+		     (awhen (find-slot-definition base-class slot-name 'db-aggregate-slot-definition)
+		       (loop
+			 for value across next-field
+			 do (setf (slot-value class slot-name)
+				  (remove value (slot-value class slot-name) :test #'equal)))))))))
+    (row-reader (fields)
+      (loop
+	while (next-row)
+	do (loop
+	     for field across fields
+	     do (process-fields (field-name field) (next-field field)))
+	finally (return class)))))
 
 
 (define-layered-method execute 
-  :in-layer update-node ((old serialize) (new serialize))
-  (values (or (proc-template old new)
-	      (setf (proc-template old new) (generate-procedure old new)))
-	  (update-op-dispatch-statement old new procedure)))
+  :in-layer update-node ((old serialize) (new serialize) &rest rest &key)
+  (let ((procedure (or (apply #'proc-template old new rest)
+		       (setf (apply #'proc-template old new rest) (apply #'generate-procedure old new rest)))))
+    (values (update-op-dispatch-statement old new procedure)
+	    procedure)))
 
 
 (define-layered-method generate-procedure
-  :in-layer update-node ((old serialize) (new serialize))
+  :in-layer update-node ((old serialize) (new serialize) &rest rest &key)
+  (declare (ignore rest))
   (let* ((base-class (class-of old))
 	 (procedure (make-instance 'procedure
 				   :schema (slot-value base-class 'schema)
@@ -47,8 +83,9 @@
       (let ((components (update-components tables (mapcar #'car where) (mapcar #'car set))))
 	(multiple-value-bind (mapped-table components%)
 	    (one-to-many-update-components old new)
-	  (setf (gethash mapped-table components) components%
-		tables (nconc tables (list mapped-table)))
+	  (setf (gethash mapped-table components) components%)
+	  (when mapped-table
+	    (setf tables (nconc tables (list mapped-table))))
 	  (with-slots (args vars sql-list p-controls sql-statement relevant-slots) procedure
 	    (let* ((open 1)
 		   (close open))
@@ -94,7 +131,7 @@
 			(destructuring-bind (insert delete) component
 			  (process-agg-component :insert insert)
 			  (process-agg-component :delete delete))))))
-	      (setf sql-list (nreverse sql-list)
+	      (setf sql-list (nreverse (push "RETURN;" sql-list))
 		    p-controls (nreverse p-controls)
 		    relevant-slots (nreverse relevant-slots)))))))
     procedure))
@@ -135,14 +172,17 @@
 			 (slot-value new slot-name))
       for to-delete = (set-difference old-values new-values :test #'equal)
       for to-insert = (set-difference new-values old-values :test #'equal)
-      for mapped-table = (mapped-table (slot-value slot 'maps))
+      for maps = (slot-value slot 'maps)
+      for mapped-table = (mapped-table maps)
       when to-insert
 	collect (with-active-layers (insert-table)
-		  (generate-component mapped-table))
+		  (generate-component mapped-table nil
+				      :mapping-column (slot-definition-name slot)))
 	  into components%
       when to-delete
 	collect (with-active-layers (delete-table)
-		  (generate-component mapped-table))
+		  (generate-component mapped-table nil
+				      :mapping-node maps))
 	  into components%
       finally (when (or to-insert to-delete)
 		(return (values mapped-table components%))))))
@@ -158,7 +198,7 @@
 	       for (symbol slot) in relevant-slots
 	       for slot-name = (slot-definition-name slot)
 	       if (typep slot 'db-column-slot-definition)
-		 collect (prepare-value slot (slot-value (if (eq symbol :old) old new) slot-name))
+		 collect (prepare-value% slot (slot-value (if (eq symbol :old) old new) slot-name))
 	       else 
 		 collect (let* ((old-values (slot-value old slot-name))
 				(new-values (slot-value new slot-name))
@@ -166,10 +206,10 @@
 			   (if (eq symbol :insert)
 			       (loop
 				 for value in (set-difference new-values old-values :test #'equal)
-				 collect (prepare-value column value t))
+				 collect (prepare-value% column value t))
 			       (loop
 				 for value in (set-difference old-values new-values :test #'equal)
-				 collect (prepare-value column value)))))))))
+				 collect (prepare-value% column value)))))))))
 				
 		 
 	       
@@ -180,19 +220,18 @@
     nil)
 
   (:method
-      :in-layer update-node ((tables cons) (where cons) (set cons))
+      :in-layer update-node (tables where set)
     (let ((components (make-hash-table :test #'eq :size (length tables))))
       (loop
 	for table in tables
 	for slots = (filter-slots-by-type table 'db-base-column-definition)
-	for component = (with-active-layers (update-table)
-			  (update-component table 
-					    (remove-if-not #'(lambda (slot)
-							       (eq table (slot-value slot 'table-class)))
-							   where)
-					    (remove-if-not #'(lambda (slot)
-							       (eq table (slot-value slot 'table-class)))
-							   set)))
+	for component = (update-component table 
+					  (remove-if-not #'(lambda (slot)
+							     (eq table (slot-value slot 'table-class)))
+							 where)
+					  (remove-if-not #'(lambda (slot)
+							     (eq table (slot-value slot 'table-class)))
+							 set))
 	when component
 	  do (setf (gethash table components) component))
       components)))
@@ -215,7 +254,7 @@
     nil)
 
   (:method
-      :in-layer update-table ((class db-table-class) (where cons) (set cons))
+      :in-layer update ((class db-table-class) (where cons) (set cons))
     (with-slots (schema table) class
       (let* ((set-columns (mapcar #'column-name set))
 	     (where-columns (mapcar #'column-name where)))
@@ -226,10 +265,10 @@
 		      set-columns
 		      where-columns)
 	 :set-params (mapcar #'(lambda (slot)
-				 (list :in (format nil "set_~a" (column-name slot)) (domain slot)))
+				 (list :inout (format nil "set_~a" (column-name slot)) (set-sql-name schema (domain slot))))
 			     set)
 	 :where-params (mapcar #'(lambda (slot)
-				   (list :in (format nil "where_~a" (column-name slot)) (domain slot)))
+				   (list :in (format nil "where_~a" (column-name slot)) (set-sql-name schema (domain slot))))
 			       where)
 	 :set-controls (update-param-controls set)
 	 :where-controls (update-param-controls where))))))
@@ -238,4 +277,6 @@
 (defun update-param-controls (list)
   (loop
     for slot in list
-    collect (list (format nil "~~a::~a" (slot-value slot 'domain)) slot)))
+    collect (list (format nil "~~a::~a"
+			  (set-sql-name (slot-value slot 'schema) (slot-value slot 'domain)))
+		  slot)))

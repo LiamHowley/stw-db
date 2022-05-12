@@ -13,7 +13,8 @@
 
 (define-layered-method generate-procedure
   :in-layer delete-table
-  ((class serialize) (component db-table-class))
+  ((class serialize) (component db-table-class) &rest rest &key)
+  (declare (ignore rest))
   (let ((procedure (call-next-method)))
     (setf (slot-value procedure 'name)
 	  (format nil "~(~a~)_delete" 
@@ -22,11 +23,11 @@
 
 
 (define-layered-method generate-procedure
-  :in-layer delete-node ((class serialize) component)
+  :in-layer delete-node ((class serialize) component &rest rest &key)
   "Deletes value at root key, and assumes a cascade. If foreign keys are
 not set to cascade on deletion, then the list include-tables exists to incorporate
 tables as required. If orphaned data is desired, leave include-tables blank"
-  (declare (ignore component))
+  (declare (ignore component rest))
   (let* ((base-class (class-of class))
 	 (root-key (slot-value base-class 'root-key))
 	 (root-table (slot-value root-key 'table))
@@ -59,23 +60,23 @@ tables as required. If orphaned data is desired, leave include-tables blank"
 
 
 (define-layered-method generate-component
-  :in delete-table ((class db-table-class))
+  :in delete-table ((class db-table-class) function &key mapping-node)
+  (declare (ignore function))
   (with-slots (primary-keys schema table) class
-    (let ((table-name (set-sql-name schema table)))
+    (let ((table-name (set-sql-name schema table))
+	  (mapped-column (when mapping-node
+			   (slot-definition-name (mapped-column mapping-node)))))
       (loop 
 	for column in primary-keys
 	for column-name = (slot-value column 'column-name)
 	for column-type = (slot-value column 'col-type)
-	for mapping-column = (slot-value column 'mapped-by)
-	if mapping-column
-	  collect (list :in
-			(format nil "delete_~a" column-name)
+	if (eq (slot-definition-name column) mapped-column)
+	  collect (list :inout
+			(format nil "delete_~(~a~)" (slot-definition-name (mapping-slot mapping-node)))
 			(format nil "~a[]" column-type))
 	    into args
-	    and collect (format nil "~a IN (SELECT UNNEST ($~~a))"
-				column-name)
-		  into where
-		  and collect (list "ARRAY[~{~a~^, ~}]" column) into p-controls
+	    and collect (format nil "~a IN (SELECT UNNEST ($~~a))" column-name) into where
+	    and collect (list "ARRAY[~{~a~^, ~}]" column) into p-controls
 	else
 	  collect (list :in (format nil "_~a" column-name) column-type) into args
 	  and collect `("~a" ,column) into p-controls

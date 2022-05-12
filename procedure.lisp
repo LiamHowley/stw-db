@@ -28,7 +28,7 @@
 
 
 (defstruct component
-  (sql nil :type string)
+  (sql "" :type string)
   (declarations () :type list)
   (params)
   (param-controls))
@@ -37,8 +37,9 @@
   column var param)
 
 
+(define-layered-function generate-components (class &key))
 
-(define-layered-function generate-component (class))
+(define-layered-function generate-component (class function &key))
 
 ;;; pg composite arrays - used in passing values to insert procedure calls
 
@@ -60,14 +61,50 @@
 
 
 ;;; generating a procedure for insert/delete ops
+(define-layered-function generate-procedure (class component &rest rest &key)
 
-(define-layered-method generate-procedure
-  :in-layer db-layer
-  :around ((class serialize) component)
-  (let ((procedure (call-next-method)))
-    (set-control procedure)
-    (statement procedure)
-    procedure))
+  (:method
+      :in-layer db-layer
+      :around ((class serialize) component &rest rest &key)
+    (declare (ignore rest))
+    (let ((procedure (call-next-method)))
+      (set-control procedure)
+      (statement procedure)
+      procedure))
+
+  (:method
+      :in-layer db-table-layer ((class serialize) (component db-table-class) &key)
+    (declare (ignore rest))
+    (with-slots (schema table require-columns referenced-columns) component
+      (let ((procedure (make-instance 'procedure
+				      :schema schema
+				      :table class))
+	    (returns)
+	    (mapping-slot (mapping-slot (match-mapping-node class component))))
+	(with-slots (args vars sql-list p-controls relevant-slots) procedure
+	  (let ((component (generate-component component nil :mapping-column mapping-slot)))
+	    (with-slots (sql params param-controls declarations) component
+	      (loop
+		for declaration in declarations
+		for var = (var-var declaration)
+		collect (var-param declaration) into params%
+		collect var into vars%
+		collect (format nil "~a := ~a;" (var-column declaration) (car var)) into returns%
+		finally (setf vars vars%
+			      params (nconc params params%)
+			      returns returns%))
+	      (setf sql-list `(,(apply #'format nil sql
+				       (loop
+					 for i from 1 to (length params)
+					 collect i))
+			       ,@returns)
+		    args params
+		    p-controls param-controls
+		    relevant-slots (get-relevant-slots class procedure)))))
+	procedure))))
+
+
+
 
 
 (define-layered-function set-control (procedure)
@@ -88,36 +125,7 @@
 			      schema name (map-tree-depth-first #'stringp p-controls))))))
 
 
-(define-layered-function generate-procedure (class component)
 
-  (:method
-      :in-layer db-table-layer ((class serialize) (component db-table-class))
-    (with-slots (schema table require-columns referenced-columns) component
-      (let ((procedure (make-instance 'procedure
-				      :schema schema
-				      :table class))
-	    (returns))
-	(with-slots (args vars sql-list p-controls relevant-slots) procedure
-	  (let ((component (generate-component component)))
-	    (with-slots (sql params param-controls declarations) component
-	      (loop
-		for declaration in declarations
-		for var = (var-var declaration)
-		collect (var-param declaration) into params%
-		collect var into vars%
-		collect (format nil "~a := ~a;" (var-column declaration) (car var)) into returns%
-		finally (setf vars vars%
-			      params (nconc params params%)
-			      returns returns%))
-	      (setf sql-list `(,(apply #'format nil sql
-				       (loop
-					 for i from 1 to (length params)
-					 collect i))
-			       ,@returns)
-		    args params
-		    p-controls param-controls
-		    relevant-slots (get-relevant-slots class procedure)))))
-	procedure))))
 
 
 (define-layered-function get-relevant-slots (class procedure)

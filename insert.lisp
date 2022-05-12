@@ -3,7 +3,8 @@
 
 (define-layered-method generate-procedure
   :in-layer insert-table
-  ((class serialize) (component db-table-class))
+  ((class serialize) (component db-table-class) &rest rest &key)
+  (declare (ignore rest))
   (let ((procedure (call-next-method)))
     (setf (slot-value procedure 'name)
 	  (format nil "~(~a~)_insert" 
@@ -12,8 +13,8 @@
 
 
 (define-layered-method generate-procedure
-  :in-layer insert-node ((class serialize) component)
-  (declare (ignore component))
+  :in-layer insert-node ((class serialize) component &rest rest &key)
+  (declare (ignore component rest))
   (let* ((base-class (class-of class))
 	 (components (generate-components base-class))
 	 (tables (include-tables class))
@@ -54,37 +55,6 @@
 	      sql-list (nconc (nreverse sql-list) returns)
 	      vars (nreverse vars)))
       procedure)))
-
-
-(define-layered-method generate-component
-  :in-layer insert-table ((class db-table-class))
-  (with-slots (schema table require-columns referenced-columns) class
-    (let ((type-array (format nil "~a.~a_type[]" schema table)))
-      (loop
-	for slot in (filter-slots-by-type class 'db-column-slot-definition)
-	for column-name = (slot-value slot 'column-name)
-	for column-type = (slot-value slot 'col-type)
-	if (member slot require-columns :test #'equality)
-	  collect column-name into required-columns
-	else
-	  collect (list :in (format nil "insert_~a" column-name) column-type) into args
-	  and collect "$~a" into select
-	  and collect `("~a" ,slot) into p-controls
-	collect column-name into columns
-	finally (return
-		  (make-component
-		   :sql (format nil
-				"INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} from unnest($~~a);"
-				(set-sql-name schema table)
-				columns
-				(nconc required-columns select))
-		   :params `(,@args (:in ,type-array nil))
-		   :param-controls `(,@p-controls ,(sql-typed-array class))))))))
-
-
-(define-layered-method generate-component
-  :in insert-table ((class db-key-table))
-  (nth-value 1 (generate-components class)))
 
 
 (define-layered-function include-tables (class))
@@ -150,91 +120,130 @@ and not null. Returns a boolean.")
      :param (list :out column col-type))))
 
 
-(define-layered-function generate-components (class)
-  (:documentation "When specializing on the (sub)class DB-KEY-TABLE 
-two values are returned: 1. the class-name and 2. an instance of
-the structure class COMPONENT. When called with DB-INTERFACE-CLASS
-each referenced table is subsequently called, a hash-table is returned
-with the key value pair, class-name => COMPONENT. Results are cached.")
 
-  (:method
-      :in db-interface-layer ((class db-interface-class))
-    (let* ((tables (tables class))
-	   (components (make-hash-table :test #'eq :size (length tables))))
-      (with-active-layers (db-table-layer)
-	(loop
-	  for table in tables
-	  do (multiple-value-bind (table-class component)
-		 (generate-components (find-class table))
-	       (setf (gethash table-class components) component))))
-      components))
+(define-layered-method generate-components
+  :in insert-node ((class db-interface-class) &key)
+  (let* ((tables (tables class))
+	 (components (make-hash-table :test #'eq :size (length tables))))
+    (loop
+      for table in tables
+      do (multiple-value-bind (table-class component)
+	     (generate-component (find-class table)
+				 #'(lambda (f-key)
+				     (with-slots (ref-table no-join) f-key
+				       (unless no-join
+					 (member ref-table tables :test #'eq)))))
+	   (setf (gethash table-class components) component)))
+    components))
 
-  (:method
-      :in db-table-layer ((class db-key-table))
-    (with-slots (schema table) class
-      (let* ((slot (car (filter-slots-by-type class 'db-column-slot-definition)))
-	     (column (column-name slot))
-	     (table-name (set-sql-name schema table))
-	     (declared-var (list (declared-var table column (slot-value slot 'col-type)))))
-	(values
-	 (class-name class)
-	 (make-component 
-	  :sql (format nil "INSERT INTO ~a DEFAULT VALUES RETURNING ~a INTO ~a;"
-		       table-name (set-sql-name table column) (car (var-var (car declared-var))))
-	  :declarations declared-var)))))
 
-  (:method
-      :in-layer db-table-layer ((class db-table-class))
-    (with-slots (schema table require-columns referenced-columns) class
-      (let* ((columns (mapcar #'column-name require-columns))
-	     (vars (mapcar #'(lambda (column)
-			       (set-sql-name table column))
-			   columns))
-	     (reference-vars columns)
-	     (declared-vars
-	       (mapcar #'(lambda (column)
-			   (declared-var table (car column) (cadr column)))
-		       referenced-columns)))
-	(map nil #'(lambda (f-key)
-		     (with-slots (key column no-join) f-key
-		       (unless no-join
-			 (push (db-syntax-prep key) columns)
-			 (let ((reference (format nil "_~a_~a"
-						  (db-syntax-prep (slot-value f-key 'table))
-						  (db-syntax-prep column))))
-			   ;; If there are no vars as referenced in require-columns, all vars are
-			   ;; referencing declared variables; i.e. returned results from table(s) insert op
-			   ;; corresponding to the foreign-keys of the current table.
-			   (cond (vars
-				  (push reference vars)
-				  (push reference reference-vars))
-				 (t
-				  (push reference reference-vars)))))))
-	     (foreign-keys class))
-	;; Returning values: The class-name of table and a structure object
-	;; of type component, containing:
-	;; 1. statement,
-	;; 2. variables that need to be declared and
-	;; 3. the pg reference for the argument array that needs to be set.
-	;; 4. a control string to build the argument array.
-	(values
-	 (class-name class)
-	 (make-component 
-	  :sql (format nil
-		       "INSERT INTO ~a (~{~a~^, ~}) ~a~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
-		       (set-sql-name schema table)
-		       columns
-		       (if vars
-			   (format nil "SELECT ~{~a~^, ~} FROM UNNEST ($~~a)" reference-vars)
-			   (format nil "VALUES (~{~a~^, ~})" reference-vars))
-		       (mapcar #'(lambda (column)
-				   (set-sql-name table (car column)))
-			       referenced-columns)
-		       (mapcar #'(lambda (var)
-				   (car (var-var var)))
-			       declared-vars))
-	  :declarations declared-vars
-	  :params (when vars
-		    (list :in (format nil "~a_type[]" (set-sql-name schema table)) nil))
-	  :param-controls (when vars
-			    (sql-typed-array class))))))))
+(define-layered-method generate-component
+  :in insert-node ((class db-key-table) function &key)
+  (declare (ignore function))
+  (with-slots (schema table) class
+    (let* ((slot (car (filter-slots-by-type class 'db-column-slot-definition)))
+	   (column (column-name slot))
+	   (table-name (set-sql-name schema table))
+	   (declared-var (list (declared-var table column (slot-value slot 'col-type)))))
+      (values
+       (class-name class)
+       (make-component 
+	:sql (format nil "INSERT INTO ~a DEFAULT VALUES RETURNING ~a INTO ~a;"
+		     table-name (set-sql-name table column) (car (var-var (car declared-var))))
+	:declarations declared-var)))))
+
+
+(define-layered-method generate-component
+  :in-layer insert-node ((class db-table-class) (f-key-p function) &key)
+  (with-slots (schema table require-columns referenced-columns) class
+    (let* ((columns (mapcar #'column-name require-columns))
+	   (vars (mapcar #'(lambda (column)
+			     (set-sql-name table column))
+			 columns))
+	   (reference-vars columns)
+	   (declared-vars
+	     (mapcar #'(lambda (column)
+			 (declared-var table (car column) (cadr column)))
+		     referenced-columns)))
+      (map nil #'(lambda (f-key)
+		   (when (funcall f-key-p f-key)
+		     (with-slots (key column) f-key
+		       (push (db-syntax-prep key) columns)
+		       (let ((reference (format nil "_~a_~a"
+						(db-syntax-prep (slot-value f-key 'table))
+						(db-syntax-prep column))))
+			 ;; If there are no vars as referenced in require-columns, all vars are
+			 ;; referencing declared variables; i.e. returned results from table(s) insert op
+			 ;; corresponding to the foreign-keys of the current table.
+			 (cond (vars
+				(push reference vars)
+				(push reference reference-vars))
+			       (t
+				(push reference reference-vars)))))))
+	   (foreign-keys class))
+      ;; Returning values: The class-name of table and a structure object
+      ;; of type component, containing:
+      ;; 1. statement,
+      ;; 2. variables that need to be declared and
+      ;; 3. the pg reference for the argument array that needs to be set.
+      ;; 4. a control string to build the argument array.
+      (values
+       (class-name class)
+       (make-component 
+	:sql (format nil
+		     "INSERT INTO ~a (~{~a~^, ~}) ~a~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
+		     (set-sql-name schema table)
+		     columns
+		     (if vars
+			 (format nil "SELECT ~{~a~^, ~} FROM UNNEST ($~~a)" reference-vars)
+			 (format nil "VALUES (~{~a~^, ~})" reference-vars))
+		     (mapcar #'(lambda (column)
+				 (set-sql-name table (car column)))
+			     referenced-columns)
+		     (mapcar #'(lambda (var)
+				 (car (var-var var)))
+			     declared-vars))
+	:declarations declared-vars
+	:params (when vars
+		  (list :in (format nil "~a_type[]" (set-sql-name schema table)) nil))
+	:param-controls (when vars
+			  (sql-typed-array class)))))))
+
+
+(define-layered-method generate-component
+  :in-layer insert-table ((class db-table-class) function &key mapping-column)
+  (declare (ignore function))
+  (with-slots (schema table require-columns referenced-columns) class
+    (let ((typed-array-name (or (when mapping-column
+				  (format nil "insert_~(~a~)" mapping-column))
+				"insert_array"))
+	  (type-array (format nil "~a.~a_type[]" schema table)))
+      (loop
+	for slot in (filter-slots-by-type class 'db-column-slot-definition)
+	for column-name = (slot-value slot 'column-name)
+	for column-type = (slot-value slot 'col-type)
+	if (member slot require-columns :test #'equality)
+	  collect column-name into required-columns
+	else
+	  collect (list :in (format nil "insert_~a" column-name) column-type) into args
+	  and collect "$~a" into select
+	  and collect `("~a" ,slot) into p-controls
+	collect column-name into columns
+	finally (return
+		  (make-component
+		   :sql (format nil
+				"INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} from unnest($~~a);"
+				(set-sql-name schema table)
+				columns
+				(nconc select required-columns))
+		   :params `(,@args (:inout ,typed-array-name ,type-array))
+		   ;;:params `(,@args (:in ,type-array nil))
+		   :param-controls `(,@p-controls ,(sql-typed-array class))))))))
+
+
+
+
+(define-layered-method generate-component
+  :in insert-table ((class db-key-table) function &key)
+  (declare (ignore function))
+  (nth-value 1 (generate-components class)))

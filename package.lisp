@@ -10,16 +10,20 @@
 		:ensure-list
 		:explode-string
 		:with-gensyms
+		:mappend
 		:map-tree-depth-first
 		:ordered-plist-values
 		:ensure-list
 		:flatten
-		:number-range)
+		:reverse-flatten
+		:number-range
+		:array-to-list)
   (:import-from :stw.meta
 		:with-context
 		:define-base-class
 		:stw-base-layer
 		:serialize
+		:serialized-p
 		:base-class
 		:stw-base-class
 		:stw-direct-slot-definition
@@ -47,12 +51,12 @@
 		:define-layered-method
 		:call-next-layered-method
 		:singleton-class
-		:partial-class
 		:partial-class-base-initargs
 		:remove-layer
 		:adjoin-layer-using-class)
   (:import-from :closer-mop
 		:slot-definition-name
+		:slot-definition-type
 		:slot-definition-initargs)
   (:import-from :cl-postgres
 		:database-connection
@@ -79,6 +83,10 @@
 	   :define-key-table
 	   :define-interface-node
 
+	   :db-interface-class
+	   :db-table-class
+	   :db-key-table
+
 	   :db-layer
 	   :db-interface-layer
 	   :db-table-layer
@@ -87,18 +95,27 @@
 	   :retrieve-node
 	   :delete-node
 	   :insert-table
-	   :update-table
-	   :retrieve-table
 	   :delete-table
 
+	   :define-db-environment
+	   :connection-params
 	   :db-connect
-	   :db-update
 	   :connection-pool
 	   :clear-connection-pool
-	   
+	   :*connections-limit*
+
 	   :db-base-column-definition
 	   :db-column-slot-definition
 	   :db-aggregate-slot-definition
+
+	   ;; ops
+	   :execute
+	   :read-row-to-class
+
+	   ;; template/caching
+	   :get-key
+	   :db-template-register
+	   :proc-template
 
 	   ;;;; schema
 	   :create-schema
