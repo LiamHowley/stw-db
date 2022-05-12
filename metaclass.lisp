@@ -131,44 +131,55 @@ with a single column of type serial."))
   (mapped-columns () :type list))
 
 
-(defmethod map-column-p ((column db-column-slot-definition) maps-column maps-columns)
-  (unless (member slot (slot-value column 'mapped-by) :test #'eq)
-    (let ((name (slot-definition-name column)))
-      (or (eq name maps-column)
-	  (member name maps-columns)))))
-
-
-(defmethod default-column-map ((slot db-aggregate-slot-definition) maps-table maps-columns)
-  (with-slots (maps) slot
-    (setf maps
-	  (list :maps-table maps-table
-		:maps-columns (mapcan #'(lambda (column)
-					  (list column))
-				      (filter-slots-by-type (find-class maps-table) 'db-column-slot-definition))))))
-
-
-
 (define-layered-method initialize-in-context
   :in db-interface-layer ((slot db-aggregate-slot-definition) 
 			  &key maps-table maps-column maps-columns)
   (with-slots (maps express-as-type) slot
-    (let ((slot-name (slot-definition-name slot)))
-
-      (when maps-table
-	;; maps table must correspond to a class
-	(unless (find-class maps-table)
-	  (error "the table ~a specified in maps-table of slot ~a does not exist" maps-table (slot-definition-name slot)))
-
-	;; ensure mapping
-	(unless (or maps-column maps-columns)
-	  (warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a. All columns without foreign-keys of table ~a will be mapped." slot-name maps-table))
-;;	  (default-column-map slot maps-table maps-columns))
-
-	(setf maps (list maps-table maps-columns maps-column)))
-
+    (when maps-table
+      (unless (find-class maps-table)
+	(error "the table ~a specified in maps-table does not exist" maps-table))
+      (unless (or maps-column maps-columns)
+	(warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a." (slot-definition-name slot)))
+      (setf maps (make-slot-mapping 
+		  :mapping-slot slot
+		  :mapped-table (find-class maps-table)
+		  :mapped-column (find-slot-definition maps-table maps-column 'db-column-slot-definition)
+		  :mapped-columns (loop for column in maps-columns
+					collect (find-slot-definition maps-table column 'db-column-slot-definition))))
       (unless express-as-type
 	(setf (slot-value slot 'express-as-type) maps-table)))))
 
+
+
+(define-layered-class root-key
+  :in-layer db-interface-layer ()
+  ((table :initarg :table :reader table)
+   (column :initarg :column :reader column)))
+
+
+(define-layered-class foreign-key
+  :in-layer db-table-layer (root-key)
+  ((key :initarg :key :initform nil :reader key)
+   (ref-schema :initarg :ref-schema :initform nil :reader ref-schema)
+   (ref-table :initarg :ref-table :initform nil :reader ref-table)
+   (schema :initarg :schema :initform nil :reader schema)
+   (on-update :initarg :on-update :initform nil :reader on-update)
+   (on-delete :initarg :on-delete :initform nil :reader on-delete)
+   (no-join :initarg :no-join :initform nil :type boolean :reader no-join)))
+
+
+(defmethod shared-initialize :after ((class foreign-key) slot-names &rest initargs &key table column schema on-update on-delete)
+  (unless (and table column)
+    (error "Foreign key plist must contain both :TABLE and :COLUMN params"))
+  (unless schema
+    (setf (slot-value class 'schema) (schema (find-class table))))
+  (flet ((on-action (action)
+	   (when action
+	     (unless (member action '(:restrict :cascade :no-action :set-null :set-default))
+	       (error "~a is not a keyword. Accepted values include :RESTRICT :CASCADE :NO-ACTION :SET-NULL :SET-DEFAULT"
+		      action)))))
+    (on-action on-update)
+    (on-action on-delete)))
 
 
 (define-layered-method initialize-in-context
@@ -191,48 +202,29 @@ with a single column of type serial."))
       (setf (slot-value slot 'check)
 	    (infill-column check slot-name)))
 
-    (flet ((test-foreign-key (key)
-	     (unless (and (getf key :table)
-			  (getf key :column))
-	       (error "Foreign key plist must contain both :TABLE and :COLUMN params"))
-	     (unless (getf key :schema)
-	       (setf (getf foreign-key :schema) (schema (find-class (getf key :table)))))
-	     (flet ((on-action (action)
-		      (when action
-			(unless (member action '(:restrict :cascade :no-action :set-null :set-default))
-			  (error "~a is not a keyword. Accepted values include :RESTRICT :CASCADE :NO-ACTION :SET-NULL :SET-DEFAULT"
-				 action)))))
-	       (let ((on-update (getf key :update))
-		     (on-delete (getf key :delete)))
-		 (on-action on-update)
-		 (on-action on-delete)))))
-
-      (when foreign-key
-	(test-foreign-key foreign-key)))))
+    (when foreign-key
+      (let ((schema (getf foreign-key :schema)))
+	(setf (slot-value slot 'foreign-key)
+	      (apply #'make-instance 'foreign-key
+		     :schema schema
+		     :ref-schema schema
+		     :key slot-name
+		     foreign-key))))))
 
 
-
-(defun sort-tables (tables backtrace-table)
-  (loop
-    until (eql (hash-table-count backtrace-table) 0)
-    do (maphash #'(lambda (key values)
-		    (let ((match))
-		      (typecase values
-			(cons
-			 (loop
-			   for value in values
-			   when (gethash value backtrace-table)
-			     do (setf (gethash key backtrace-table) value)
-			     and do (setf match t)))
-			(symbol
-			 (when (gethash values backtrace-table)
-			   (setf match t))))
-		      (unless match
-			(setf tables (remove key tables :test #'eq))
-			(push key tables)
-			(remhash key backtrace-table))))
-		backtrace-table))
-  tables)
+(defun sort-tables (backtrace-alist)
+  (let ((acc))
+    (stw.util:map-tree-depth-first
+     #'(lambda (item)
+	 (cond ((member item acc)
+		nil)
+	       (t (push item acc)
+		  item)))
+     (nreverse
+      (sort backtrace-alist
+	    #'(lambda (a b)
+		(member (car a) (cdr b) :test #'eq))))
+     t)))
 
 
 (define-layered-function ensure-bound-columns (class)
@@ -251,23 +243,6 @@ with a single column of type serial."))
 	(reduce #'set-difference (list tables acc (list (class-name referring-table))))))))
 
 
-(define-layered-class root-key
-  :in-layer db-interface-layer ()
-  ((table :initarg :table :reader table)
-   (column :initarg :column :reader column)))
-
-
-(define-layered-class foreign-key
-  :in-layer db-table-layer (root-key)
-  ((key :initarg :key :initform nil :reader key)
-   (ref-schema :initarg :ref-schema :initform nil :reader ref-schema)
-   (ref-table :initarg :ref-table :initform nil :reader ref-table)
-   (schema :initarg :schema :initform nil :reader schema)
-   (on-update :initarg :on-update :initform nil :reader on-update)
-   (on-delete :initarg :on-delete :initform nil :reader on-delete)
-   (no-join :initarg :no-join :initform nil :reader no-join)))
-
-
 (define-layered-method initialize-in-context
   :in db-interface-layer ((class db-wrap) &key)
   (with-slots (root-key foreign-keys tables) class
@@ -275,7 +250,7 @@ with a single column of type serial."))
     ;; Read relevant precedents into tables and each tables foreign-keys
     ;; into the nodes foreign-key slot. Backtrace-table and f-key-table
     ;; are used for sorting foreign keys based on mutual dependencies.
-    (let ((backtrace-table (make-hash-table :test #'eq)))
+    (let (backtrace-table)
       (flet ((collate-keys (table-class)
 	       (loop
 		 for key in (slot-value table-class 'foreign-keys)
@@ -287,9 +262,9 @@ with a single column of type serial."))
 			(when (slot-value ref-slot 'root-key)
 			  (setf root-key (make-instance 'root-key :table (find-class table)
 								  :column ref-slot))))
-		      (if (gethash table backtrace-table)
-			  (pushnew (class-name table-class) (gethash table backtrace-table))
-			  (setf (gethash table backtrace-table) (list (class-name table-class))))))))
+		      (aif (assoc table backtrace-table :test #'eq)
+			   (pushnew (class-name table-class) (cdr self))
+			   (setf backtrace-table (acons table (list (class-name table-class)) backtrace-table)))))))
 	(loop
 	  for object in (filter-precedents-by-type class 'stw-base-class)
 
@@ -300,35 +275,19 @@ with a single column of type serial."))
 	    do (pushnew (class-name object) tables :test #'eq)
 	    and do (collate-keys object))
 
-	;; add tables mapped by aggregator slots and update
-	;; mappings to reflect class and slot definitions.
-	
+	;; add tables mapped by aggregator slots and push
+	;; mappings to class, table and slot definitions.
 	(loop
 	  for slot in (filter-slots-by-type class 'db-aggregate-slot-definition)
 	  do (with-slots (maps) slot
-	       (when (consp maps)
-		 (destructuring-bind (maps-table maps-columns maps-column) maps
-		   (pushnew maps-table tables :test #'eq)
-		   (setf maps-table (find-class maps-table)
-			 maps-column (when maps-column
-				       (find-slot-definition maps-table maps-column 'db-column-slot-definition))
-			 maps-columns (loop for column in maps-columns
-					    collect (find-slot-definition maps-table column 'db-column-slot-definition)))
-		   (collate-keys maps-table)
-
-		   ;; let the respective table and column know it is being mapped and by whom
-		   (let ((column-map (make-slot-mapping :mapping-node class
-							:mapping-slot slot
-							:mapped-table maps-table
-							:mapped-column maps-column
-							:mapped-columns maps-columns)))
-		     (pushnew column-map (slot-value class 'maps) :test #'eq)
-		     (pushnew column-map (slot-value maps-column 'mapped-by) :test #'eq)
-		     (pushnew column-map (slot-value maps-table 'mapped-by) :test #'eq)
-		     (setf maps column-map)))))))
-
-      ;; now sort the tables
-      (setf tables (sort-tables tables backtrace-table))))
+	       (with-slots (mapping-node mapped-table mapped-column) maps
+		 (setf mapping-node class)
+		 (pushnew (class-name mapped-table) tables :test #'eq)
+		 (collate-keys mapped-table)
+		 (pushnew maps (slot-value class 'maps) :test #'eq)
+		 (pushnew maps (slot-value mapped-column 'mapped-by) :test #'eq)
+		 (pushnew maps (slot-value mapped-table 'mapped-by) :test #'eq))))
+	(setf tables (sort-tables backtrace-table)))))
   ;; and ensure each column is tied to the root-key
   (awhen (ensure-bound-columns class)
     (error "the table(s) ~{~a^ ~} are not bound to a root-key. 
@@ -355,22 +314,17 @@ They either don't belong in this node or a foreign key is required" self)))
 	     (setf column-name (db-syntax-prep slot-name)
 		   (slot-value slot 'table) table
 		   table-class class
-		   domain (format nil "~a_~a" table column-name))
+		   domain (format nil "~a_~a" table column-name)
+		   (slot-value slot 'schema) schema)
 	     (when referenced
 	       (pushnew (list column-name col-type) referenced-columns :test #'equal))
 	     (when foreign-key
-	       (destructuring-bind (&key table column on-delete on-update no-join) foreign-key
-		 (declare (ignore on-delete on-update column))
-		 (let ((key-class (apply #'make-instance 'foreign-key
-					 :schema schema
-					 :ref-schema schema
-					 :ref-table (class-name class)
-					 :key slot-name
-					 foreign-key)))
-		   (unless (member slot-name (mapcar #'key foreign-keys) :test #'eq)
-		     (pushnew key-class foreign-keys :test #'eq)
-		     (pushnew key-class (slot-value (find-class table) 'referenced-by)
-			      :test #'eq)))))
+	       (with-slots (ref-table table) foreign-key
+		 (setf ref-table (class-name class))
+		 (unless (member slot-name (mapcar #'key foreign-keys) :test #'eq)
+		   (pushnew foreign-key foreign-keys :test #'eq)
+		   (pushnew foreign-key (slot-value (find-class table) 'referenced-by)
+			    :test #'eq))))
 
 	     ;; check constraints
 	     (when check
@@ -391,7 +345,7 @@ They either don't belong in this node or a foreign key is required" self)))
   (loop
     for slot in (filter-slots-by-type instance 'db-column-slot-definition)
     for foreign-key = (slot-value slot 'foreign-key)
-    when (and foreign-key (getf foreign-key :no-join))
+    when (and foreign-key (slot-value foreign-key 'no-join))
       collect slot into require-columns%
     unless (or foreign-key
 	       (let ((col-type (slot-value slot 'col-type)))
@@ -403,11 +357,6 @@ They either don't belong in this node or a foreign key is required" self)))
 
   
 
-
-(defun serialized-p (supers)
-  (and supers
-       (loop for class in supers
-	       thereis (filter-precedents-by-type class 'singleton-class))))
 
 (defmacro define-db-class (name layer metaclass &body body)
   (unless (serialized-p (car body))
@@ -428,5 +377,13 @@ They either don't belong in this node or a foreign key is required" self)))
      ,@body))
 
 (defmacro define-interface-node (name &body body)
-  `(define-db-class ,name db-interface-layer db-interface-class
-     ,@body))
+  (let ((metaclass
+	  (aif (cddr body)
+	       (aif (assoc :metaclass self)
+		    (prog1
+			(cadr self)
+		      (setf (cddr body) (delete self (cddr body))))
+		    'db-interface-class)
+	       'db-interface-class)))
+    `(define-db-class ,name db-interface-layer ,metaclass
+       ,@body)))
