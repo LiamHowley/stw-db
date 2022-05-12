@@ -3,8 +3,7 @@
 		 "stw-utils"
 		 "cl-postgres"
 		 "bordeaux-threads"
-		 "atomics"
-		 "fare-memoization")
+		 "atomics")
     :description ""
     :serial t
     :components ((:file "package")
