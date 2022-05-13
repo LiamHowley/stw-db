@@ -167,11 +167,25 @@
 		     (t (error err)))))))))
 
   (:method
-      :in-layer db-layer ((class serialize) component &rest rest &key &allow-other-keys)
-    (let ((procedure (or (apply #'proc-template class component rest)
-			 (setf (apply #'proc-template class component rest) (apply #'generate-procedure class component rest)))))
-      (values (dispatch-statement class procedure)
+      :in-layer db-layer ((class serialize) component &rest rest &key refresh-cache &allow-other-keys)
+    (let* ((procedure (or (cond (refresh-cache
+				 (remf rest :refresh-cache)
+				 (let ((procedure (apply #'generate-procedure class component rest)))
+				   (exec-query *db* (sql-statement procedure))
+				   (setf (apply #'proc-template class component rest) procedure)))
+				(t
+				 (apply #'proc-template class component rest)))
+			  (setf (apply #'proc-template class component rest) (apply #'generate-procedure class component rest))))
+	   (dispatcher (dispatch class component procedure)))
+      (values (apply (car dispatcher) (cdr dispatcher))
 	      procedure))))
+
+
+(define-layered-function dispatch (class component procedure)
+  (:method
+      :in db-layer ((class serialize) component (procedure procedure))
+    (declare (ignore component))
+    `(dispatch-statement ,class ,procedure)))
 
 
 (define-layered-function match-mapping-node (class table)

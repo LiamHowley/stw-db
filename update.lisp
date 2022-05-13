@@ -56,12 +56,9 @@
 	finally (return class)))))
 
 
-(define-layered-method execute 
-  :in-layer update-node ((old serialize) (new serialize) &rest rest &key)
-  (let ((procedure (or (apply #'proc-template old new rest)
-		       (setf (apply #'proc-template old new rest) (apply #'generate-procedure old new rest)))))
-    (values (update-op-dispatch-statement old new procedure)
-	    procedure)))
+(define-layered-method dispatch
+  :in update-node ((old serialize) (new serialize) (procedure procedure))
+  `(update-op-dispatch-statement ,old ,new ,procedure))
 
 
 (define-layered-method generate-procedure
