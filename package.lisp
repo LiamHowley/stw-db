@@ -112,12 +112,20 @@
 	   :execute
 	   :read-row-to-class
 
-	   ;; template/caching
+	   ;; template dispatch and caching
 	   :get-key
 	   :db-template-register
 	   :proc-template
+	   :dispatcher
+	   :dispatch-statement
+	   :update-op-dispatch-statement
 
-	   ;;;; schema
+	   ;;; procedures / functions
+	   :generate-procedure
+	   :generate-components
+	   :generate-component
+
+	   ;;; schema
 	   :create-schema
 	   :set-schema
 	   :set-privileged-user
@@ -127,7 +135,7 @@
 	   :foreign-keys-statements
 	   :index-statement
 
-	   ;;;; utils
+	   ;;; utils
 
 	   ;; syntax
 	   :db-syntax-prep
