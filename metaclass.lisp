@@ -168,11 +168,13 @@ with a single column of type serial."))
    (no-join :initarg :no-join :initform nil :type boolean :reader no-join)))
 
 
-(defmethod shared-initialize :after ((class foreign-key) slot-names &rest initargs &key table column schema on-update on-delete)
+(defmethod shared-initialize :after ((class foreign-key) slot-names &rest initargs &key table column schema ref-schema on-update on-delete)
   (unless (and table column)
     (error "Foreign key plist must contain both :TABLE and :COLUMN params"))
   (unless schema
     (setf (slot-value class 'schema) (schema (find-class table))))
+  (unless ref-schema
+    (setf (slot-value class 'ref-schema) (slot-value class 'schema)))
   (flet ((on-action (action)
 	   (when action
 	     (unless (member action '(:restrict :cascade :no-action :set-null :set-default))
@@ -184,7 +186,7 @@ with a single column of type serial."))
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((slot db-column-slot-definition)
-		      &key col-type table check primary-key foreign-key root-key &allow-other-keys)
+		      &key col-type check primary-key foreign-key root-key &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
 
     (flet ((process-primary-key ()
@@ -207,7 +209,8 @@ with a single column of type serial."))
 	(setf (slot-value slot 'foreign-key)
 	      (apply #'make-instance 'foreign-key
 		     :schema schema
-		     :ref-schema schema
+		     :ref-schema (or (getf foreign-key :ref-schema)
+				     schema)
 		     :key slot-name
 		     foreign-key))))))
 

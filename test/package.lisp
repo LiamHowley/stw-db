@@ -4,6 +4,9 @@
 	:stw.db)
   (:import-from :contextl
    :with-active-layers)
+  (:import-from :stw.meta
+		:clone-object
+		:find-slot-definition)
   (:shadow
    :define-db-table
    :define-key-table)

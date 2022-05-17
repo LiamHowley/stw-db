@@ -212,11 +212,11 @@ and not null. Returns a boolean.")
 
 
 (define-layered-method generate-component
-  :in-layer insert-table ((class db-table-class) function &key mapping-column)
+  :in-layer insert-table ((class db-table-class) function &key mapping-node)
   (declare (ignore function))
   (with-slots (schema table require-columns referenced-columns) class
-    (let ((typed-array-name (or (when mapping-column
-				  (format nil "insert_~(~a~)" mapping-column))
+    (let ((typed-array-name (or (when mapping-node
+				  (format nil "insert_~(~a~)" (slot-definition-name (mapping-slot mapping-node))))
 				"insert_array"))
 	  (type-array (format nil "~a.~a_type[]" schema table)))
       (loop
@@ -238,7 +238,6 @@ and not null. Returns a boolean.")
 				columns
 				(nconc select required-columns))
 		   :params `(,@args (:inout ,typed-array-name ,type-array))
-		   ;;:params `(,@args (:in ,type-array nil))
 		   :param-controls `(,@p-controls ,(sql-typed-array class))))))))
 
 

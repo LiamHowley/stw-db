@@ -92,15 +92,14 @@ of class with updated values.")
 
   (:method
       :in-layer db-table-layer ((class serialize) (component db-table-class) &key)
-    (declare (ignore rest))
     (with-slots (schema table require-columns referenced-columns) component
       (let ((procedure (make-instance 'procedure
 				      :schema schema
 				      :table class))
 	    (returns)
-	    (mapping-slot (mapping-slot (match-mapping-node class component))))
+	    (mapping-node (match-mapping-node (class-of class) component)))
 	(with-slots (args vars sql-list p-controls relevant-slots) procedure
-	  (let ((component (generate-component component nil :mapping-column mapping-slot)))
+	  (let ((component (generate-component component nil :mapping-node mapping-node)))
 	    (with-slots (sql params param-controls declarations) component
 	      (loop
 		for declaration in declarations
@@ -167,6 +166,6 @@ from an instance of serialize, with which to query a database.")
 			     (loop
 			       for mapping in self
 			       when (typep class (slot-value mapping 'mapping-node))
-				 do (return mapping))
+				 do (return (mapping-slot mapping)))
 			     (cadr control)))))
 	      p-controls))))

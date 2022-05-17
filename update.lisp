@@ -56,7 +56,7 @@
 	finally (return class)))))
 
 
-(define-layered-method dispatch
+(define-layered-method dispatcher
   :in update-node ((old serialize) (new serialize) (procedure procedure))
   `(update-op-dispatch-statement ,old ,new ,procedure))
 
@@ -179,7 +179,7 @@ db-aggregate-slot-definition.")
       when to-insert
 	collect (with-active-layers (insert-table)
 		  (generate-component mapped-table nil
-				      :mapping-column (slot-definition-name slot)))
+				      :mapping-node maps))
 	  into components%
       when to-delete
 	collect (with-active-layers (delete-table)
