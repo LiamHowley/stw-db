@@ -136,6 +136,8 @@
 
 
 (define-layered-function one-to-one-update-components (old new)
+  (:documentation "Build components based on slots of type 
+db-column-slot-definition.")
 
   (:method
       :in update-node ((old serialize) (new serialize))
@@ -158,6 +160,9 @@
 
 
 (define-layered-function one-to-many-update-components (old new)
+  (:documentation "Build components based on slots of type 
+db-aggregate-slot-definition.")
+
   (:method
       :in update-node ((old serialize) (new serialize))
     (loop
@@ -186,6 +191,9 @@
 
 
 (define-layered-function update-op-dispatch-statement (old new procedure)
+  (:documentation "Build dispatching statement from list of relevant-slots
+and the control string p-control. Values are obtained from (old serialize) and 
+it's clone (new serialize). Applies only to update-node context.")
 
   (:method
       :in update-node ((old serialize) (new serialize) (procedure procedure))

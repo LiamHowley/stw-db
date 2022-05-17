@@ -61,9 +61,10 @@
 
 (define-layered-method include-tables
   :in insert-node ((class serialize))
-  "Included tables must be either:
+  "Included tables must either:
 1. have required-columns that are bound and not null, or
-2. have no required columns."
+2. have no required columns.
+Returns a list of tables."
   (let ((tables (slot-value (class-of class) 'tables)))
     (loop
       with num = 0

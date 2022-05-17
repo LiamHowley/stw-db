@@ -37,13 +37,23 @@
   column var param)
 
 
-(define-layered-function generate-components (class &key))
+(define-layered-function generate-components (class &key)
+  (:documentation "Traverses a list of tables and calls generate-component.
+Returns a hash table of table name => component."))
 
-(define-layered-function generate-component (class function &key))
+(define-layered-function generate-component (class function &key)
+  (:documentation "Creates an instance of component. When function 
+is non nill, a predicate is expected to determine the validity of 
+a foreign key references within the context of the current
+expressions."))
+
 
 ;;; pg composite arrays - used in passing values to insert procedure calls
 
 (define-layered-function sql-typed-array (class)
+  (:documentation "Control for postgres composite typed arrays, 
+according to class.")
+
   (:method
       :in db-layer ((class db-table-class))
     (with-slots (schema table require-columns mapped-by) class
@@ -62,6 +72,14 @@
 
 ;;; generating a procedure for insert/delete ops
 (define-layered-function generate-procedure (class component &rest rest &key)
+  (:documentation "Generates and returns a procedure. If component is non nil
+a procedure is generated for that component alone. In all contexts but update-node
+a component is an instance of db-table-class or nil. When nil, the function
+generate components is called which returns a hash-table of table name => components
+which are subsequently parsed and aggregated.
+
+When the layered context is update-node, a component is expected to be a cloned copy 
+of class with updated values.")
 
   (:method
       :in-layer db-layer
@@ -108,6 +126,9 @@
 
 
 (define-layered-function set-control (procedure)
+  (:documentation "Returns a control string to be populated with values 
+from an instance of serialize, with which to query a database.")
+  
   (:method
       :in db-layer ((procedure procedure))
     (with-slots (schema name p-control p-controls) procedure

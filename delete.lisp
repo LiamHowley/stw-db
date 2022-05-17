@@ -25,8 +25,7 @@
 (define-layered-method generate-procedure
   :in-layer delete-node ((class serialize) component &rest rest &key)
   "Deletes value at root key, and assumes a cascade. If foreign keys are
-not set to cascade on deletion, then the list include-tables exists to incorporate
-tables as required. If orphaned data is desired, leave include-tables blank"
+not set to cascade on deletion, then data will be orphaned."
   (declare (ignore component rest))
   (let* ((base-class (class-of class))
 	 (root-key (slot-value base-class 'root-key))
