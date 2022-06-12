@@ -16,4 +16,10 @@
       '(OR (AND (> ID 3) (< ID 5)) (AND (> ID 10) (< ID 13))))
   (is equal
       (infill-column '(or (and (> 3 foo) (< 5 bar)) (and (> 10) (< 13))) 'id)
-      '(OR (AND (> 3 FOO) (< 5 BAR)) (AND (> ID 10) (< ID 13)))))
+      '(OR (AND (> 3 FOO) (< 5 BAR)) (AND (> ID 10) (< ID 13))))
+  (is equal
+      (infix-constraint '(or (/= "alive") (= "dead")) "person") 
+      "((person <> 'alive') OR (person = 'dead'))")
+  (is equal
+      (infix-constraint '(or (and (/= "alive")(= "happy"))(= "dead")) "person") 
+      "(((person <> 'alive') AND (person = 'happy')) OR (person = 'dead'))"))

@@ -91,3 +91,28 @@
 			   (cons 
 			    (cons (infill-column (car inner) column) acc)))))))
       (walk list nil))))
+
+
+(defun infix-constraint (list &optional column)
+  "Infixing is done in the process of creating a constraint. COLUMN is optional
+but must be provided if not already encoded within LIST."
+  (let ((op (sql-op (car list))))
+    (cond ((consp op)
+	   (invalid-operator-error "~a is not a valid operator." (car list)))
+	  ((eql (list-length list) 2)
+	   (push (db-syntax-prep column) (cdr list))))
+    (labels ((walk (inner acc)
+	       (if (null inner)
+		   (format nil "~a" (nreverse (butlast acc)))
+		   (walk (cdr inner)
+			 (typecase (car inner)
+			   (string
+			    (cons (if (equal (car inner) (car (last inner)))
+				      (format nil "'~a'" (car inner))
+				      (format nil "~a" (car inner)))
+				  (push op acc)))
+			   (atom
+			    (cons (car inner) (push op acc)))
+			   (cons 
+			    (cons (infix-constraint (car inner) column) (push op acc))))))))
+      (walk (cdr list) nil))))

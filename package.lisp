@@ -144,7 +144,9 @@
 	   :date/time-p
 
 	   ;; formatting
-	   :infill-column))
+	   :infill-column
+	   :infix-constraint
+
 	   ;; errors
 	   :invalid-operator-error))
 
