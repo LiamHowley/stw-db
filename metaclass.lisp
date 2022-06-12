@@ -11,6 +11,7 @@
   :in db-interface-layer (db-class)
   ((schema
     :initarg :schema
+    :initform "public"
     :reader schema)
    (tables
     :initarg :tables
@@ -85,7 +86,7 @@ Set as alist ((COLUMN . VALUE))")))
 
 
 (defclass db-column-slot-definition (db-base-column-definition)
-  ((schema :initform nil :type string :reader schema)
+  ((schema :initform "public" :type string :reader schema)
    (table-class :initform nil :reader table-class)
    (table :initarg :table :initform nil :reader table)
    (col-type :initarg :col-type :initform :text :reader col-type :type keyword)
@@ -215,6 +216,7 @@ with a single column of type serial."))
 		     foreign-key))))))
 
 
+
 (defun sort-tables (backtrace-alist)
   (let ((acc))
     (stw.util:map-tree-depth-first
@@ -272,7 +274,8 @@ with a single column of type serial."))
 	  for object in (filter-precedents-by-type class 'stw-base-class)
 
 	  ;; set schema and tables and collate foreign-keys
-	  unless (slot-boundp class 'schema)
+	  when (and (string= (slot-value class 'schema) "public")
+		    (slot-value object 'schema))
 	    do (setf (slot-value class 'schema) (slot-value object 'schema))
 	  when (typep object 'db-table-class)
 	    do (pushnew (class-name object) tables :test #'eq)
@@ -335,6 +338,7 @@ They either don't belong in this node or a foreign key is required" self)))
 		     (getf to-check :col-name) slot-name
 		     (getf to-check :table) table)
 	       (pushnew to-check constraints :test #'equal))))))))
+
 
 
 (defmethod slot-unbound (class (instance db) (slot-name (eql 'primary-keys)))
