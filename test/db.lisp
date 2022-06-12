@@ -13,11 +13,7 @@
      (:schema . ,*schema*)))
 
 
-(define-key-table user-base ()
-  ((id :col-type :serial
-       :root-key t
-       :referenced t)))
-
+(define-key-table user-base () id)
 
 (define-db-table user-account ()
   ((id :col-type :integer
@@ -38,7 +34,7 @@
 			     :on-update :cascade
 			     :no-join t))
    (validated :col-type :boolean
-	      :default nil)))
+	      :default "f")))
 
 
 (define-db-table user-id ()
@@ -158,40 +154,38 @@
 
 ;;;;; tests
 
-(define-test setting-up...
-  :parent stw-db)
 
 
 (define-test check-schema
-  :parent setting-up...
+  :parent stw-db
   (with-active-layers (db-layer)
     (is string=
-	"CREATE SCHEMA IF NOT EXISTS stw"
+	"CREATE SCHEMA IF NOT EXISTS stw_test_schema"
 	(create-schema *schema*))
     (is string=
-	"SET search_path TO stw, public"
+	"SET search_path TO stw_test_schema, public"
 	(set-schema *schema*))
     (is string=
-	"GRANT ALL PRIVILEGES ON SCHEMA stw TO liam"
+	"GRANT ALL PRIVILEGES ON SCHEMA stw_test_schema TO liam"
 	(set-privileged-user *schema* "liam"))))
 
 
 (define-test creating-table...etc
-  :parent setting-up...
+  :parent stw-db
   (with-active-layers (db-table-layer)
     (is string=
-	"CREATE TABLE IF NOT EXISTS stw.user_account (id INTEGER NOT NULL, password TEXT NOT NULL, created_on TIMESTAMPTZ DEFAULT NOW(), created_by INTEGER NOT NULL, validated BOOLEAN DEFAULT 'f', PRIMARY KEY (id));"
-	(create-statement (find-class 'user-account)))
+	"CREATE TABLE IF NOT EXISTS stw_test_schema.user_account (id INTEGER NOT NULL, password TEXT NOT NULL, created_on TIMESTAMPTZ DEFAULT NOW(), created_by INTEGER NOT NULL, validated BOOLEAN DEFAULT 'f', PRIMARY KEY (id));"
+	(create-table-statement (find-class 'user-account)))
 
     (is equal
-	'("IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stw_user_account_created_by_fkey') THEN ALTER TABLE stw.user_account ADD CONSTRAINT stw_user_account_created_by_fkey FOREIGN KEY (created_by) REFERENCES stw.user_base (id) ON UPDATE CASCADE ON DELETE CASCADE; end if;"
-	  "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stw_user_account_id_fkey') THEN ALTER TABLE stw.user_account ADD CONSTRAINT stw_user_account_id_fkey FOREIGN KEY (id) REFERENCES stw.user_base (id) ON UPDATE CASCADE ON DELETE CASCADE; end if;")
+	'("IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stw_test_schema_user_account_created_by_fkey') THEN ALTER TABLE stw_test_schema.user_account ADD CONSTRAINT stw_test_schema_user_account_created_by_fkey FOREIGN KEY (created_by) REFERENCES stw_test_schema.user_base (id) ON UPDATE CASCADE ON DELETE CASCADE; end if;"
+	  "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stw_test_schema_user_account_id_fkey') THEN ALTER TABLE stw_test_schema.user_account ADD CONSTRAINT stw_test_schema_user_account_id_fkey FOREIGN KEY (id) REFERENCES stw_test_schema.user_base (id) ON UPDATE CASCADE ON DELETE CASCADE; end if;")
 	(foreign-keys-statements (find-class 'user-account)))
 
     ;; don't know why but this always fails. The expected result is correct
     (is equal 
-	'("CREATE INDEX IF NOT EXISTS stw_user_email_user_id_idx ON stw.user_email (user_id);"
-	  "CREATE INDEX IF NOT EXISTS stw_user_email_id_idx ON stw.user_email (id);")
+	'("CREATE INDEX IF NOT EXISTS stw_test_schema_user_email_user_id_idx ON stw_test_schema.user_email (user_id);"
+	  "CREATE INDEX IF NOT EXISTS stw_test_schema_user_email_id_idx ON stw_test_schema.user_email (id);")
 	(index-statement (find-class 'user-email)))
 
     ;; only produces a statement for classes with tables that have a non-indexed foreign key.
@@ -253,7 +247,7 @@
     (with-active-layers (db-interface-layer)
 
       (let ((format-components (stw.db::sql-typed-array (find-class 'user-account))))
-	(is string= "ARRAY[(~a, ~a, ~a)]::stw.user_account_type[]" (car format-components))
+	(is string= "ARRAY[(~a, ~a, ~a)]::stw_test_schema.user_account_type[]" (car format-components))
 	(is eql 3 (length (cadr format-components)))
 	(loop
 	  for slot in (cadr format-components)
@@ -268,17 +262,17 @@
 	  (of-type stw.db::procedure procedure)
 	  (is equal
 	      '((:OUT "_id" :INTEGER) (:OUT "_user_id" :INTEGER)
-		(:IN "stw.user_email_type[]" NIL))
+		(:IN "stw_test_schema.user_email_type[]" NIL))
 	      (slot-value procedure 'stw.db::args))
-	  (is string= "CALL stw.user_insert (null, null, ARRAY[(~a)]::stw.user_email_type[])"
+	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[(~a)]::stw_test_schema.user_email_type[])"
 	      (slot-value procedure 'stw.db::p-control))
-	  (is string= "CALL stw.user_insert (null, null, ARRAY[('(liam@foobar.com)')]::stw.user_email_type[])"
+	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[('(liam@foobar.com)')]::stw_test_schema.user_email_type[])"
 	      (dispatch-statement *user* procedure))))
 
       (setf (slot-value *account* 'email) "foo@bar.com")
 
       (let ((format-components (stw.db::sql-typed-array (find-class 'user-email))))
-	(is string= "ARRAY[(~a)]::stw.user_email_type[]" (car format-components))
+	(is string= "ARRAY[(~a)]::stw_test_schema.user_email_type[]" (car format-components))
 	(is eql 1 (length (cadr format-components)))
 	(of-type 'db-column-slot-definition (caadr format-components)))
 
@@ -293,45 +287,45 @@
 	  (let ((procedure (generate-procedure *account* clone)))
 	    (of-type stw.db::procedure procedure)
 	    (is equal
-		'((:INOUT "set_email" "stw.user_email_email")
-		  (:IN "where_email" "stw.user_email_email")
-		  (:IN "where_id" "stw.user_email_id"))
+		'((:INOUT "set_email" "stw_test_schema.user_email_email")
+		  (:IN "where_email" "stw_test_schema.user_email_email")
+		  (:IN "where_id" "stw_test_schema.user_email_id"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw.account_update (~a::stw.user_email_email, ~a::stw.user_email_email, ~a::stw.user_email_id)"
+		"CALL stw_test_schema.account_update (~a::stw_test_schema.user_email_email, ~a::stw_test_schema.user_email_email, ~a::stw_test_schema.user_email_id)"
 		(slot-value procedure 'stw.db::p-control))
 	    (is string=
-		"CALL stw.account_update ('bar@foo.com'::stw.user_email_email, 'foo@bar.com'::stw.user_email_email, 1::stw.user_email_id)"
+		"CALL stw_test_schema.account_update ('bar@foo.com'::stw_test_schema.user_email_email, 'foo@bar.com'::stw_test_schema.user_email_email, 1::stw_test_schema.user_email_id)"
 		(update-op-dispatch-statement *account* clone procedure)))))
       
       (let ((format-components (stw.db::sql-typed-array (find-class 'user-site))))
-	(is string= "ARRAY[~{(~a)~^, ~}]::stw.user_site_type[]" (car format-components))
+	(is string= "ARRAY[~{(~a)~^, ~}]::stw_test_schema.user_site_type[]" (car format-components))
 
 	(with-active-layers (insert-table)
 	  (setf (slot-value *account* 'sites) '("foo.com" "bar.com" "baz.com"))
 	  (let ((procedure (generate-procedure *account* (find-class 'user-site))))
 	    (of-type stw.db::procedure procedure)
 	    (is string=
-		"CALL stw.user_site_insert (~a, ARRAY[~{(~a)~^, ~}]::stw.user_site_type[])"
+		"CALL stw_test_schema.user_site_insert (~a, ARRAY[~{(~a)~^, ~}]::stw_test_schema.user_site_type[])"
 		(slot-value procedure 'stw.db::p-control))
 	    (is equal
-		'((:IN "insert_id" :INTEGER) (:INOUT "insert_sites" "stw.user_site_type[]"))
+		'((:IN "insert_id" :INTEGER) (:INOUT "insert_sites" "stw_test_schema.user_site_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw.user_site_insert (1, ARRAY[('(foo.com)'), ('(bar.com)'), ('(baz.com)')]::stw.user_site_type[])"
+		"CALL stw_test_schema.user_site_insert (1, ARRAY[('(foo.com)'), ('(bar.com)'), ('(baz.com)')]::stw_test_schema.user_site_type[])"
 		(dispatch-statement *account* procedure))))
 	
 	(with-active-layers (delete-table)
 	  (let ((procedure (generate-procedure *account* (find-class 'user-site))))
 	    (of-type stw.db::procedure procedure)
 	    (is string=
-		"CALL stw.user_site_delete (~a, ARRAY[~{~a~^, ~}])"
+		"CALL stw_test_schema.user_site_delete (~a, ARRAY[~{~a~^, ~}])"
 		(slot-value procedure 'stw.db::p-control))
 	    (is equal
 		'((:IN "_id" :INTEGER) (:INOUT "delete_sites" "TEXT[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw.user_site_delete (1, ARRAY['(foo.com)', '(bar.com)', '(baz.com)'])"
+		"CALL stw_test_schema.user_site_delete (1, ARRAY['(foo.com)', '(bar.com)', '(baz.com)'])"
 		(dispatch-statement *account* procedure))))))))
 
 
@@ -343,16 +337,16 @@
 	   (function (generate-procedure *user* nil)))
       (of-type 'stw.db::db-function function)
       (is equal
-	  '((:IN "_email" "stw.user_email_email"))
+	  '((:IN "_email" "stw_test_schema.user_email_email"))
 	  (slot-value function 'stw.db::args))
       (is string=
 	  "user_retrievec3$1$$2$$3$$4$"
 	  (slot-value function 'stw.db::name))
       (is string=
-	  "SELECT * FROM stw.user_retrievec3$1$$2$$3$$4$ (~a::stw.user_email_email)"
+	  "SELECT * FROM stw_test_schema.user_retrievec3$1$$2$$3$$4$ (~a::stw_test_schema.user_email_email)"
 	  (slot-value function 'stw.db::p-control))
       (is string=
-	  "SELECT stw.user_base.id, stw.user_id.user_id, stw.user_email.email FROM stw.user_base INNER JOIN stw.user_id ON (stw.user_base.id = stw.user_id.id) INNER JOIN stw.user_email ON (stw.user_id.id = stw.user_email.id AND stw.user_id.user_id = stw.user_email.user_id) WHERE stw.user_email.email = $1;"
+	  "SELECT stw_test_schema.user_base.id, stw_test_schema.user_id.user_id, stw_test_schema.user_email.email FROM stw_test_schema.user_base INNER JOIN stw_test_schema.user_id ON (stw_test_schema.user_base.id = stw_test_schema.user_id.id) INNER JOIN stw_test_schema.user_email ON (stw_test_schema.user_id.id = stw_test_schema.user_email.id AND stw_test_schema.user_id.user_id = stw_test_schema.user_email.user_id) WHERE stw_test_schema.user_email.email = $1;"
 	  (slot-value function 'stw.db::sql-query)))))
 
 (define-test sql-express...
@@ -362,9 +356,9 @@
     (with-active-layers (insert-node)
       (let ((procedure (generate-procedure *user* nil)))
 	(is equal
-	    '("INSERT INTO stw.user_base DEFAULT VALUES RETURNING user_base.id INTO _user_base_id;"
-	      "INSERT INTO stw.user_id (id) VALUES (_user_base_id) RETURNING user_id.user_id INTO _user_id_user_id;"
-	      "INSERT INTO stw.user_email (user_id, id, email) SELECT _user_id_user_id, _user_base_id, email FROM UNNEST ($3);"
+	    '("INSERT INTO stw_test_schema.user_base DEFAULT VALUES RETURNING user_base.id INTO _user_base_id;"
+	      "INSERT INTO stw_test_schema.user_id (id) VALUES (_user_base_id) RETURNING user_id.user_id INTO _user_id_user_id;"
+	      "INSERT INTO stw_test_schema.user_email (user_id, id, email) SELECT _user_id_user_id, _user_base_id, email FROM UNNEST ($3);"
 	      "_user_id := _user_id_user_id;" "_id := _user_base_id;")
 	    (slot-value procedure 'stw.db::sql-list))))
 
@@ -374,11 +368,11 @@
 	(setf (slot-value *user* 'email) "liam@foobaz.com")
 	(let ((procedure (generate-procedure *user* clone)))
 	  (is equal
-	      '("UPDATE stw.user_email SET email = $1 WHERE email = $2 AND id = $3;" "RETURN;")
+	      '("UPDATE stw_test_schema.user_email SET email = $1 WHERE email = $2 AND id = $3;" "RETURN;")
 	      (slot-value procedure 'stw.db::sql-list)))))
 
     (with-active-layers (delete-node)
       (let ((procedure (generate-procedure *user* nil)))
 	(is equal
-	    '("DELETE FROM stw.user_base WHERE id = $1;")
+	    '("DELETE FROM stw_test_schema.user_base WHERE id = $1;")
 	    (slot-value procedure 'stw.db::sql-list))))))

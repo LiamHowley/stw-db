@@ -1,12 +1,15 @@
 (defpackage stw.db.test
-  (:use :cl
-	:parachute
-	:stw.db)
-  (:import-from :contextl
+  (:use :cl :parachute :stw.db)
+  (:import-from
+   :contextl
    :with-active-layers)
-  (:import-from :stw.meta
-		:clone-object
-		:find-slot-definition)
+  (:import-from
+   :stw.meta
+   :clone-object
+   :find-slot-definition)
+  (:import-from
+   :cl-postgres
+   :database-connection)
   (:shadow
    :define-db-table
    :define-key-table)
@@ -16,4 +19,4 @@
 
 (define-test stw-db)
 
-(defparameter *schema* "stw")
+(defparameter *schema* "stw_test_schema")

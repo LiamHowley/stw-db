@@ -1,0 +1,10 @@
+DATABASE="<db-name>"
+USER="<db-user>"
+PASSWORD="<db-password>"
+HOST="<db-host>"
+#PORT=5432
+#POOLED-P=t
+#USE-SSL=no
+#USE-BINARY=no
+#SERVICE="postgres"
+#APPLICATION-NAME=""
