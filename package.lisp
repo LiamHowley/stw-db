@@ -20,6 +20,7 @@
 		:array-to-list)
   (:import-from :stw.meta
 		:with-context
+		:delete-context
 		:define-base-class
 		:stw-base-layer
 		:serialize
@@ -98,6 +99,7 @@
 	   :delete-table
 
 	   :define-db-environment
+	   :delete-db-environment
 	   :connection-params
 	   :db-connect
 	   :connection-pool

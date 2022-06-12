@@ -67,12 +67,6 @@ for each of ten defined database environments means 100 potential connections."
 	      (db-pool-lock (make-lock "connection-pool-lock")))
 	 (capture-dynamic-environment)))))
 
-
-(defmacro delete-db-environment (env)
-  "Delete the captured database environment."
-  `(delete-context ,env))
-
-
 (defmacro db-connect (env (&optional (layer db-interface-layer)) &body body)
   "DB-CONNECT requires an environment, defined by the DEFINE-DB-ENVIRONMENT
 macro, and a layer of type DB-LAYER, DB-INTERFACE-LAYER or DB-TABLE-LAYER.
