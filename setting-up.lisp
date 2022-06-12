@@ -181,7 +181,7 @@
       (loop for slot in (filter-slots-by-type class 'db-column-slot-definition)
 	    for key = (db-syntax-prep (slot-definition-name slot))
 	    unless (member slot primary-keys :test #'eq)
-	      when (or (slot-value slot 'foreign-key)
+	     when (or (slot-value slot 'foreign-key)
 		       (slot-value slot 'index))
 		collect (clause (make-instance 'index :schema schema
 						      :table table
@@ -275,6 +275,7 @@ so that differing columns of the same type can be applied to a procedure call.")
 		    (mapcan #'(lambda (fn)
 				(list (funcall fn class)))
 			    function-list)))
+      (set-control procedure)
       (values
        (sql-statement (statement procedure))
        procedure))))
