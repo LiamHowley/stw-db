@@ -12,6 +12,7 @@
      finally (return
 	       (ordered-plist-values params :database :user :password :host :port :use-ssl :service))))
 
+
 (define-layered-function connection-params (file)
   (:documentation "Return ordered list of parameter values from file.")
 
@@ -32,11 +33,7 @@
 
 (defvar *pool-lock*)
 
-(defvar *connections-limit* -1
-  "A negative value indicates no limit and 0 a deactivated pool. 
-NOTE: This limit applies to each defined database environment.
-I.e. a value of 10 with ten defined database environments means
-100 connections.")
+(defvar *connections-limit*)
 
 (defdynamic db-params nil)
 
@@ -44,20 +41,37 @@ I.e. a value of 10 with ten defined database environments means
 
 (defdynamic db-pool-lock nil)
 
+(defdynamic db-connection-limit nil)
+
 
 (defstruct (connection-pool (:conc-name nil))
   (pool nil :type list))
 
-(defmacro define-db-environment (env params)
+
+(defmacro define-db-environment (env params &optional (connection-limit -1))
   "Define database environment for specific parameters.
 Subsequent connections are established using DB-CONNECT 
-macro, or it's wrappers DB-INTERFACE and DB-TABLE."
+macro, or it's wrappers DB-INTERFACE and DB-TABLE.
+
+Connection limits are set with a positive numeric value: a negative 
+value indicates no limit and 0 a deactivated pool. The default is
+no limits. 
+
+NOTE: Connection limits are enironment specific. I.e. a value of 10 
+for each of ten defined database environments means 100 potential connections."
   `(defdynamic ,env
      (with-active-layers (db-layer)
        (dlet ((db-params ,params)
 	      (db-connection-pool (make-connection-pool))
+	      (db-connection-limit ,connection-limit)
 	      (db-pool-lock (make-lock "connection-pool-lock")))
 	 (capture-dynamic-environment)))))
+
+
+(defmacro delete-db-environment (env)
+  "Delete the captured database environment."
+  `(delete-context ,env))
+
 
 (defmacro db-connect (env (&optional (layer db-interface-layer)) &body body)
   "DB-CONNECT requires an environment, defined by the DEFINE-DB-ENVIRONMENT
@@ -65,15 +79,15 @@ macro, and a layer of type DB-LAYER, DB-INTERFACE-LAYER or DB-TABLE-LAYER.
 Environment parameters are accessed within DB-CONNECT and the resulting connection
 *DB* is made available for use in the BODY form."
   (with-gensyms (pool)
-    `(with-context ,env 
-       (with-active-layers (,layer)
-	 (let* ((,pool (dynamic db-connection-pool))
-		(*pool-lock* (dynamic db-pool-lock))
-		(*db* (make-connection (dynamic db-params) ,pool)))
-	   (when (and *db* (database-open-p *db*))
-	     (unwind-protect (progn ,@body)
-	       (close-connection *db* ,pool))))))))
-
+      `(with-context ,env 
+	 (with-active-layers (,layer)
+	   (let* ((,pool (dynamic db-connection-pool))
+		  (*pool-lock* (dynamic db-pool-lock))
+		  (*connections-limit* (dynamic db-connection-limit))
+		  (*db* (make-connection (dynamic db-params) ,pool)))
+	     (when (and *db* (database-open-p *db*))
+	       (unwind-protect (progn ,@body)
+		 (close-connection *db* ,pool))))))))
 
 
 ;;(define-db-environment db
@@ -89,6 +103,21 @@ the connection pool associated with env."
        while pool
        do (close-database (pop pool)))))
 
+
+(defmacro set-connection-limit (env limit)
+  "Set a connection limit for the connection pool 
+associated with the defined environment env.
+
+Connection limits are set with a positive numeric 
+value: a negative value indicates no limit and 0 
+a deactivated pool. The default is no limits. 
+
+NOTE: Connection limits are enironment specific. 
+I.e. a value of 10 for each of ten defined database 
+environments means 100 potential connections."
+  `(with-dynamic-environment ((dynamic ,env))
+     (setf (dynamic db-connection-limit) ,limit)))
+  
 
 (define-layered-function make-connection (params connection-pool)
 

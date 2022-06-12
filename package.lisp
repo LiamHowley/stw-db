@@ -102,7 +102,7 @@
 	   :db-connect
 	   :connection-pool
 	   :clear-connection-pool
-	   :*connections-limit*
+	   :set-connection-limit
 
 	   :db-base-column-definition
 	   :db-column-slot-definition
