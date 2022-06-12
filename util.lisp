@@ -32,6 +32,21 @@
 		   '("timestamp" "date" "time" "interval"))))))
 
 
+(declaim (inline boolean-value))
+
+(defun boolean-value (value)
+  (if (numberp value)
+      (case integer
+	(1 (values t t))
+	(0 (values t nil))
+	(t (values nil nil)))
+      (scase value
+	     (("t" :t t)
+	      (values t t))
+	     (("f" :f nil)
+	      (values t nil))
+	     (t (values nil nil)))))
+
 (declaim (inline sql-op))
 
 (defun sql-op (op)
