@@ -137,6 +137,11 @@
 	   :foreign-keys-statements
 	   :index-statement
 
+	   ;;; tearing-down
+	   :drop-schema
+	   :drop-table
+	   :truncate-table
+   
 	   ;;; utils
 
 	   ;; syntax
