@@ -17,7 +17,8 @@
    (where :initarg :where :initform nil :reader where)
    (having% :initarg :having :initform nil :reader having%)
    (order-by :initarg :order-by :initform nil :reader order-by)
-   (group-by :initarg :group-by :initform nil :reader group-by)))
+   (group-by :initarg :group-by :initform nil :reader group-by)
+   (limit :initarg :limit :initform nil)))
 
 
 (define-layered-class agg
@@ -107,7 +108,9 @@ and then composed into a function expression."
   (let* ((base-class (class-of class))
 	 (schema (slot-value base-class 'schema))
 	 (tables (tables base-class))
-	 (select (make-instance 'select :order-by order-by)))
+	 (select (make-instance 'select
+				:order-by order-by
+				:limit limit)))
     (multiple-value-bind (slots-with-values slot-names positions)
 	(slots-with-values class
 			   :type 'db-base-column-definition
@@ -145,7 +148,7 @@ and then composed into a function expression."
 		finally (setf args args%
 			      p-controls p-controls%))
 
-	      ;;build select statement
+	      ;; build select statement
 	      (with-slots (col-names from joins having% order-by% group-by% where) select
 		;; tables
 		(flet ((process-component (component)
@@ -476,7 +479,7 @@ and then composed into a function expression."
 
 (define-layered-method statement
   :in retrieve-node ((this select))
-  (with-slots (col-names from joins where group-by having% order-by) this
+  (with-slots (col-names from joins where group-by having% order-by limit) this
     (when (and col-names from)
       (format nil "SELECT ~{~a~^, ~} FROM ~{~a~^, ~}~@[ ~{~a~^ ~}~]~@[~{~a~^~}~]"
 	      col-names
@@ -491,4 +494,5 @@ and then composed into a function expression."
 							 "~a")
 							(cons
 							 "~{~a ~a~}"))
-						  order))))))))
+						  order)))
+		    (format nil "~@[ LIMIT ~a~]" limit))))))
