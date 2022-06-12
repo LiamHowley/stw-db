@@ -145,5 +145,7 @@
 
 	   ;; formatting
 	   :infill-column))
+	   ;; errors
+	   :invalid-operator-error))
 
 (in-package :stw.db)

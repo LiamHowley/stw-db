@@ -7,6 +7,7 @@
     :description ""
     :serial t
     :components ((:file "package")
+		 (:file "conditions")
 		 (:file "util")
 		 (:file "layers")
 		 (:file "metaclass")
