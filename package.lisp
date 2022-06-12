@@ -131,7 +131,7 @@
 	   :set-privileged-user
 
 	   ;;;; statement functions
-	   :create-statement
+	   :create-table-statement
 	   :foreign-keys-statements
 	   :index-statement
 

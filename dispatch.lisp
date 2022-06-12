@@ -185,7 +185,7 @@ A database can be built from scratch by invoking any CRUD query.")
 		      ;; Note: An effective way to build a database is to
 		      ;; let an insert fail and thus invoke this response.
 		      (let ((proc-name (format nil "initialize_~(~a~)_relations" class-name)))
-			(respond proc-name #'create-statement #'foreign-keys-statements #'index-statement)))
+			(respond proc-name #'create-table-statement #'foreign-keys-statements #'index-statement)))
 		     ("42883"
 		      ;; MISSING INSERT PROCEDURE
 		      ;; Response: Make procedure and recurse.

@@ -26,7 +26,7 @@
 
 ;;; create table
 
-(define-layered-function create-statement (class)
+(define-layered-function create-table-statement (class)
   (:documentation "Create table(s) in schema.")
 
   (:method
@@ -35,7 +35,7 @@
       for table in (slot-value class 'tables)
       for object = (find-class table)
       for statement = (with-active-layers (db-table-layer)
-			(create-statement object))
+			(create-table-statement object))
       when statement
 	collect statement))
 
