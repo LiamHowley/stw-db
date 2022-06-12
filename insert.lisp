@@ -22,7 +22,7 @@
 	 (procedure (make-instance 'procedure
 				   :schema schema
 				   :name (format nil "~a_insert" (db-syntax-prep (class-name base-class))))))
-    (with-slots (name args vars sql-list sql-statement p-controls relevant-slots) procedure
+    (with-slots (name args vars sql-list p-controls relevant-slots) procedure
       (setf schema (slot-value base-class 'schema))
       (let (returns)
 	(loop
