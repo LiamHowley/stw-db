@@ -88,15 +88,17 @@
 (define-layered-method generate-procedure
   :in-layer retrieve-node
   ((class serialize) component &rest rest
-   &key optional-join union-queries union-all-queries having group-by order-by)
+   &key optional-join union-queries union-all-queries having group-by order-by limit)
   (declare (ignore component))
-  "During insert, delete and update operations, create procedure statements are composed
-of parts/expressions derived during calls to GENERATE-COMPONENTS. In a select/retrieval operation, the
-select statement is composed of clauses/parts derived from GENERATE-COMPONENTS into a discrete expression
-and then composed into a function expression."
-  ;;; this method is awful clunky and could maybe be broken up into
-  ;;; constituent parts. It's basically a controller so relies on having
-  ;;; lots of information and passing said information on.
+  ;; During insert, delete and update operations, create procedure statements are
+  ;; composed of parts/expressions derived during calls to GENERATE-COMPONENTS.
+  ;; In a select/retrieval operation, the select statement is composed of
+  ;; clauses/parts derived from GENERATE-COMPONENTS concatenated 
+  ;; into a discrete expression and then composed into a function expression.
+
+  ;; This method is awful clunky and could maybe be broken up into
+  ;; constituent parts. It's basically a controller so relies on having
+  ;; lots of information and passing said information on.
 
   (macrolet ((test-queries (query-type)
 	       `(when (eql (length ,query-type) 1)
@@ -177,15 +179,16 @@ and then composed into a function expression."
 
 		;; where
 		(flet ((slot-relevant-p (slot)
-			 (notany #'(lambda (table)
-				     (map-filtered-slots
-				      (find-class table)
-				      #'(lambda (slot)
-					  (typep slot 'db-base-column-definition))
-				      #'(lambda (slot%)
-					  (eq (slot-definition-name slot%)
-					      (slot-definition-name slot)))))
-				 (append union-queries union-all-queries))))
+			 (and (typep slot 'db-column-slot-definition)
+			      (notany #'(lambda (table)
+					  (map-filtered-slots
+					   (find-class table)
+					   #'(lambda (slot)
+					       (typep slot 'db-column-slot-definition))
+					   #'(lambda (slot%)
+					       (eq (slot-definition-name slot%)
+						   (slot-definition-name slot)))))
+				      (append union-queries union-all-queries)))))
 		  (setf where (nconc where
 				     (loop
 				       for slot in slots-with-values
@@ -221,11 +224,10 @@ and then composed into a function expression."
 
   (:method
       :in retrieve-node ((slot db-aggregate-slot-definition))
-    (let* ((mapped-column (mapped-column (maps slot)))
-	  (schema (slot-value mapped-column 'schema)))
+    (let* ((mapped-column (mapped-column (maps slot))))
 	(list :in
 	      (format nil "_~a" (db-syntax-prep (slot-definition-name slot)))
-	      (format nil "~a.~a[]" schema (col-type mapped-column))))))
+	      (format nil "~a[]" (col-type mapped-column))))))
 
 
 (define-layered-function input-control (slot)
@@ -247,15 +249,8 @@ and then composed into a function expression."
       :in retrieve-node ((slot db-column-slot-definition) (slot-value-p function))
     (awhen (funcall slot-value-p slot)
       (with-slots (schema table column-name) slot
-	(list (set-sql-name schema table column-name) := (format nil "$~a" self)))))
+	(list (set-sql-name schema table column-name) := (format nil "$~a" self))))))
 
-  (:method
-      :in retrieve-node ((slot db-aggregate-slot-definition) (slot-value-p function))
-    (awhen (funcall slot-value-p slot)
-      (let ((mapped-column (mapped-column (maps slot))))
-	(list (column-name mapped-column) :in (format nil "(SELECT UNNEST ($~a))" self))))))
-
-      
 
 
 (define-layered-method generate-components
@@ -282,7 +277,8 @@ and then composed into a function expression."
 			(unless no-join
 			  (member ref-table tables :test #'eq))))
 		  :join-to last
-		  :join-type join-type)
+		  :join-type join-type
+		  :slot-value-p slot-value-p)
 	       (setf (gethash table-class components) component
 		     return-columns (nconc return-columns return-columns%))
 	       (unless (eq join-type :left)
@@ -356,7 +352,7 @@ and then composed into a function expression."
 
 
 (define-layered-method generate-component
-  :in retrieve-node ((class db-key-table) function &key join-to)
+  :in retrieve-node ((class db-key-table) function &key join-to slot-value-p)
   (declare (ignore function))
   (with-slots (schema table) class
     (let* ((slot (car (filter-slots-by-type class 'db-column-slot-definition)))
@@ -373,14 +369,15 @@ and then composed into a function expression."
 
 
 (define-layered-method generate-component
-  :in retrieve-node ((class slot-mapping) (f-key-p function) &key join-to (join-type :inner))
+  :in retrieve-node ((class slot-mapping) (f-key-p function) &key join-to (join-type :inner) slot-value-p)
   (let* ((join (make-instance 'join :join-type join-type))
 	 (mapped-table (mapped-table class))
 	 (mapped-slot (mapped-column class))
-	 (mapping-slot (db-syntax-prep (slot-definition-name (mapping-slot class))))
+	 (mapping-slot% (mapping-slot class))
+	 (mapping-slot (db-syntax-prep (slot-definition-name mapping-slot%)))
 	 (schema (schema mapped-table))
 	 (slots (filter-slots-by-type mapped-table 'db-column-slot-definition))
-	 (table-name (set-sql-name schema (class-name mapped-table)))
+	 (table-name (set-sql-name schema (table mapped-table)))
 	 (f-keys)
 	 (columns (loop
 		    for slot in slots
@@ -390,35 +387,61 @@ and then composed into a function expression."
 		    else
 		      collect (set-sql-name mapping-slot (if (eq slot mapped-slot)
 							     mapping-slot
-							     (column-name slot))))))
-    (with-slots (table on) join
-      (setf table 
-	    (clause
-	     (make-instance 'array-agg
-			    :alias mapping-slot
-			    :from table-name
-			    :col-names (ensure-list (set-sql-name table-name (slot-definition-name mapped-slot)))
-			    :group-by (mapcan #'(lambda (slot)
-						  (unless (eq slot mapped-slot)
-						    (list (set-sql-name table-name (slot-definition-name slot)))))
-					      slots)))
-	    on (loop
-		 for f-key in f-keys
-		 collect (with-slots (schema key) f-key
-			   `(,(set-sql-name join-to key)
-			     ,(set-sql-name mapping-slot key)))))
-      (values
-       (class-name mapped-table)
-       (make-select-component
-	:alias mapping-slot
-	:columns columns
-	:join (clause join))
-       (list (return-var (mapping-slot class)))))))
+							     (column-name slot)))))
+	 (last)
+	 (table-clause))
+    (flet ((on (last current)
+	     (loop
+	       for f-key in f-keys
+	       collect (with-slots (schema key) f-key
+			 `(,(set-sql-name last key)
+			   ,(set-sql-name current key))))))
+
+      ;; When values are bound to mapping slot in class mapping-node 
+      ;; any retrieved records must validate against at least one of
+      ;; of the supplied values.
+      (awhen (funcall slot-value-p mapping-slot%)
+	(let ((group-by (mapcar #'(lambda (f-key)
+				    (set-sql-name table-name (slot-value f-key 'key)))
+				f-keys))
+	      (col-name (set-sql-name table-name (slot-definition-name mapped-slot))))
+	  (setf last (concatenate 'string (db-syntax-prep mapping-slot) "_key"))
+	  (with-slots (table on) join
+	    (setf table (clause
+			 (make-instance 'agg
+					:alias last
+					:from table-name
+					:group-by group-by
+					:where (format nil "~a IN (SELECT UNNEST ($~a))" col-name self)))
+		  on (on join-to last)
+		  table-clause (clause join)))))
+
+      (with-slots (table on) join
+	(setf table 
+	      (clause
+	       (make-instance 'array-agg
+			      :alias mapping-slot
+			      :from table-name
+			      :col-names (ensure-list (set-sql-name table-name (slot-definition-name mapped-slot)))
+			      :group-by (mapcan #'(lambda (slot)
+						    (unless (eq slot mapped-slot)
+						      (list (set-sql-name table-name (column-name slot)))))
+						slots)))
+	      on (on (if table-clause last join-to) mapping-slot))
+	(values
+	 (class-name mapped-table)
+	 (make-select-component
+	  :alias mapping-slot
+	  :columns columns
+	  :join (if table-clause
+		    (concatenate 'string table-clause " " (clause join))
+		    (clause join)))
+	 (list (return-var (mapping-slot class))))))))
 
 
 
 (define-layered-method generate-component
-  :in retrieve-node ((class db-table-class) (f-key-p function) &key join-to (join-type :inner))
+  :in retrieve-node ((class db-table-class) (f-key-p function) &key join-to (join-type :inner) slot-value-p)
   (with-slots (schema table) class
     (let* ((slots (filter-slots-by-type class 'db-column-slot-definition))
 	   (table-name (set-sql-name schema table))
@@ -438,7 +461,7 @@ and then composed into a function expression."
 	  (setf table table-name
 		on (loop
 		     for f-key in f-keys
-		     collect (with-slots (schema key) f-key
+		     collect (let ((key (slot-value f-key 'key)))
 			       `(,(set-sql-name join-to key)
 				 ,(set-sql-name table-name key))))))
 	(values
@@ -468,6 +491,13 @@ and then composed into a function expression."
   (with-slots (queries alias) this
     (setf queries (format nil "(~{(~a)~^ UNION ALL ~})~@[ ~a~]"
 			  queries alias))))
+
+
+(define-layered-method clause
+  :in retrieve-node ((this agg))
+  (with-slots (from group-by alias where) this
+    (format nil "((SELECT ~{~a~^, ~} FROM ~a~@[ WHERE ~a~] GROUP BY ~{~a~^, ~})) ~a"
+	    group-by from where group-by alias)))
 
 
 (define-layered-method clause
