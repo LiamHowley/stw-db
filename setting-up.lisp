@@ -11,11 +11,13 @@
 (define-layered-function create-schema (schema)
   (:method
       :in db-layer (schema)
+    (princ (format nil "Creating schema: ~a~%" schema))
     (format nil "CREATE SCHEMA IF NOT EXISTS ~(~a~)" schema)))
 
 (define-layered-function set-schema (schema)
   (:method
       :in db-layer (schema)
+    (princ (format nil "Search path set to: ~a~%" schema))
     (format nil "SET search_path TO ~(~a~), public" schema)))
 
 (define-layered-function set-privileged-user (schema user)
@@ -42,6 +44,7 @@
   (:method
       :in db-table-layer ((class db-table-class))
     (with-slots (schema table primary-keys constraints) class
+      (princ (format nil "Creating table: ~s in schema: ~s~%" table schema))
       (format nil "CREATE TABLE IF NOT EXISTS ~a.~a (~{~a~^, ~}~@[, ~a~]~@[, ~{~a~^, ~}~]);" 
 	      schema table
 	      (loop for column in (filter-slots-by-type class 'db-column-slot-definition)
@@ -159,6 +162,7 @@
 
   (:method 
       :in-layer db-interface-layer ((class db-interface-class))
+    (princ "indexing...")
     (labels ((to-index (tables acc)
 	       (if (null tables)
 		   acc
@@ -220,6 +224,7 @@ multiple records in a one-to-many relationship.")
   (:method
       :in db-table-layer ((class db-table-class)) 
     (with-slots (schema table require-columns) class
+      (princ (format nil "Creating type: ~a_type~%" table))
       (let ((table-name (set-sql-name schema table)))
 	(format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a_type') THEN CREATE TYPE ~a_type AS (~{~{~a ~a~}~^, ~}); END IF;"
 		(db-syntax-prep table) table-name (mapcar #'(lambda (column)
@@ -247,11 +252,12 @@ so that differing columns of the same type can be applied to a procedure call.")
 
   (:method
       :in db-table-layer ((class db-table-class)) 
-    (with-slots (domain schema table require-columns) class
+    (with-slots (schema table require-columns) class
       (format nil "~{~a~}"
 	      (let ((columns (filter-slots-by-type class 'db-column-slot-definition)))
 		(loop
 		  for column in columns
+		  do (princ (format nil "Creating type: ~s~%" (slot-value column 'domain)))
 		  collect (with-slots (domain col-type) column
 			    (format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE DOMAIN ~a.~a AS ~a; END IF;"
 				    domain schema domain (if (eq col-type :serial)
