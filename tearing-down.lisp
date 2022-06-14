@@ -30,18 +30,16 @@
 ;;; tables
 
 (defmacro define-table-op (op format-control error-control &rest error-args)
-  (with-gensyms (table-name table confirmed)
+  (with-gensyms (table-name key-table confirmed)
     `(define-layered-function ,op (class &optional ,confirmed)
        (:method
 	   :in db-interface-layer ((class db-interface-class) &optional ,confirmed)
-	 (safety-first
-	   (unless ,confirmed
-	     (warn ,error-control ,@error-args))
-	   (with-slots (tables) class
-	     (loop
-	       for ,table in tables
-	       do (with-active-layers (db-table-layer)
-		    (,op (find-class ,table) t))))))
+	 (unless ,confirmed
+	   (warn ,error-control ,@error-args))
+	 (with-slots (root-key) class
+	   (let ((,key-table (slot-value root-key 'table)))
+	     (with-active-layers (db-table-layer)
+	       (,op ,key-table t)))))
        (:method
 	   :in db-table-layer ((class db-table-class) &optional ,confirmed)
 	 (safety-first
