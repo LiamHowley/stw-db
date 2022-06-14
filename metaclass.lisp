@@ -375,8 +375,18 @@ They either don't belong in this node or a foreign key is required" self)))
 
 
 (defmacro define-key-table (name &body body)
-  `(define-db-class ,name db-table-layer db-key-table
-     ,@body))
+  "A key table is a single column table with 
+autoincrementing values, defined as a separate
+type purely for convenience and to enable 
+dispatching on type."
+  (let ((column (ensure-list (cadr body))))
+    (setf (getf (cdr column) :col-type) :serial
+	  (getf (cdr column) :root-key) t
+	  (getf (cdr column) :referenced) t
+	  (cadr body) (list column))
+    `(define-db-class ,name db-table-layer db-key-table
+       ,@body)))
+
 
 (defmacro define-db-table (name &body body)
   `(define-db-class ,name db-table-layer db-table-class
