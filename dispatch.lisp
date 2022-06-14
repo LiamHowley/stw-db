@@ -65,6 +65,7 @@ calling db-template-register.")
 (define-layered-function dispatch-statement (class procedure)
   (:documentation "Build dispatching statement from list of relevant-slots
 and the control string p-control. Values are obtained from serialize.")
+
   (:method
       :in db-layer ((class serialize) (procedure procedure))
     (with-slots (p-control relevant-slots) procedure
@@ -74,7 +75,11 @@ and the control string p-control. Values are obtained from serialize.")
 			 (cond ((null inner)
 				acc)
 			       ((atom inner)
-				(let ((result (prepare-value% inner (slot-value class (slot-definition-name inner)) parenthesize)))
+				(let* ((slot-name (slot-definition-name inner))
+				       (value (or (and (slot-boundp class slot-name)
+						       (slot-value class slot-name))
+						  "null"))
+				       (result (prepare-value% inner value parenthesize)))
 				  (cond (result
 					 (cons result acc))
 					(t acc))))
@@ -113,15 +118,15 @@ to class(es).")
 		 for slot = (find-slot-definition (class-of class) slot-name 'db-aggregate-slot-definition)
 		 do (let ((next-field (next-field field)))
 		      (unless (eq next-field :null)
-			(when (and next-field (find-slot-definition base-class slot-name 'db-base-column-definition)
-				   (setf (slot-value node slot-name)
-					 (if slot
-					     (let ((slot-type (slot-definition-type slot)))
-					       (if (or (eq slot-type 'list)
-						       (eq slot-type 'cons))
-						   (array-to-list next-field)
-						   next-field))
-					     next-field)))))))
+			(when (find-slot-definition base-class slot-name 'db-base-column-definition)
+			  (setf (slot-value node slot-name)
+				(if slot
+				    (let ((slot-type (slot-definition-type slot)))
+				      (if (or (eq slot-type 'list)
+					      (eq slot-type 'cons))
+					  (array-to-list next-field)
+					  next-field))
+				    next-field))))))
 	    collect node into nodes
 	    finally (return (if (eql i 0) node nodes))))))))
 
@@ -187,7 +192,7 @@ A database can be built from scratch by invoking any CRUD query.")
 		      (let ((proc-name (format nil "initialize_~(~a~)_relations" class-name)))
 			(respond proc-name #'create-table-statement #'foreign-keys-statements #'index-statement)))
 		     ("42883"
-		      ;; MISSING INSERT PROCEDURE
+		      ;; MISSING PROCEDURE
 		      ;; Response: Make procedure and recurse.
 		      (exec (sql-statement procedure))
 		      (apply #'execute class component rest))

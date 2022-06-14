@@ -75,7 +75,6 @@ Set as alist ((COLUMN . VALUE))")))
    (primary-keys :initarg :primary-keys :initform nil :accessor primary-keys :type (null cons))
    (foreign-keys :initarg :foreign-keys :initform nil :accessor foreign-keys :type (null cons))
    (referenced-by :initarg :referenced-by :initform nil :accessor referenced-by :type (cons null))
-   (referenced-columns :initarg :referenced-columns :initform nil :accessor referenced-columns :type (cons null))
    (constraints :initarg :constraints :initform nil :reader constraints :type (null cons))
    (mapped-by :initform nil :reader mapped-by :type (null cons))
    (require-columns :type (null string) :reader require-columns)))
@@ -103,6 +102,8 @@ Set as alist ((COLUMN . VALUE))")))
    (value :initarg :value :initform nil)
    (mapped-by :initform nil :reader mapped-by)
    (column-name :reader column-name)))
+
+
 
 (defmethod slot-definition-class ((class stw-table))
   'db-column-slot-definition)
@@ -303,7 +304,7 @@ They either don't belong in this node or a foreign key is required" self)))
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((class db) &key)
-  (with-slots (schema foreign-keys constraints table referenced-columns) class
+  (with-slots (schema foreign-keys constraints table) class
     (mapcar #'(lambda (slot)
 		(slot-makunbound class slot))
 	    '(primary-keys require-columns))
@@ -322,8 +323,6 @@ They either don't belong in this node or a foreign key is required" self)))
 		   table-class class
 		   domain (format nil "~a_~a" table column-name)
 		   (slot-value slot 'schema) schema)
-	     (when referenced
-	       (pushnew (list column-name col-type) referenced-columns :test #'equal))
 	     (when foreign-key
 	       (with-slots (ref-table table) foreign-key
 		 (setf ref-table (class-name class))
