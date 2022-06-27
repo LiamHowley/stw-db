@@ -134,7 +134,8 @@ and not null. Returns a boolean.")
 				     (with-slots (ref-table no-join) f-key
 				       (unless no-join
 					 (member ref-table tables :test #'eq)))))
-	   (setf (gethash table-class components) component)))
+	   (when component
+	     (setf (gethash table-class components) component))))
     components))
 
 
