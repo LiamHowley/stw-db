@@ -111,16 +111,14 @@ and not null. Returns a boolean.")
 
 
 
-(defun declared-var (table column)
-  (with-slots (col-type default column-name) column
-    (when (or (eq col-type :serial)
-	      default)
-      (let ((col-type% (if (eq col-type :serial) :integer col-type))
-	    (column-param (format nil "_~a" column-name)))
-	(make-var
-	 :column column-param
-	 :var (list (format nil "_~a_~a" (db-syntax-prep table) column-name) col-type% nil)
-	 :param (list :out column-param col-type%))))))
+(defun declared-var (table column &optional preface)
+  (with-slots (col-type column-name) column
+    (let ((col-type% (if (eq col-type :serial) :integer col-type))
+	  (column-param (format nil "~@[~a~]_~a" preface column-name)))
+      (make-var
+       :column column-param
+       :var (list (format nil "_~a_~a" (db-syntax-prep table) column-name) col-type% nil)
+       :param (list :out column-param col-type%)))))
 
 
 
@@ -147,13 +145,16 @@ and not null. Returns a boolean.")
     (let* ((slot (car (filter-slots-by-type class 'db-column-slot-definition)))
 	   (column (column-name slot))
 	   (table-name (set-sql-name schema table))
-	   (declared-var (list (declared-var table slot))))
+	   (declared-var (with-slots (col-type default) slot
+			   (when (or (eq col-type :serial)
+				     default)
+			     (declared-var table slot)))))
       (values
        (class-name class)
        (make-component 
 	:sql (format nil "INSERT INTO ~a DEFAULT VALUES RETURNING ~a INTO ~a;"
-		     table-name (set-sql-name table column) (car (var-var (car declared-var))))
-	:declarations declared-var
+		     table-name (set-sql-name table column) (car (var-var declared-var)))
+	:declarations (list declared-var)
 	:param-controls (list nil))))))
 
 
@@ -173,7 +174,10 @@ and not null. Returns a boolean.")
       ;; :serial, or a default value.
       (loop
 	for column in (filter-slots-by-type class 'db-column-slot-definition)
-	for declared-var = (declared-var table column)
+	for declared-var = (with-slots (col-type default) column
+			     (when (or (eq col-type :serial)
+				       default)
+			       (declared-var table column)))
 	when declared-var
 	  collect declared-var into declared-vars%
 	  and collect column into returning-columns%
