@@ -17,7 +17,7 @@
       unless (equal new-value old-value)
 	collect slot-name into set 
     finally (return (list set where))))
-      
+
 
 
 (define-layered-method read-row-to-class 
@@ -56,6 +56,7 @@
 	finally (return class)))))
 
 
+
 (define-layered-method dispatcher
   :in update-node ((old serialize) (new serialize) (procedure procedure))
   `(update-op-dispatch-statement ,old ,new ,procedure))
@@ -75,7 +76,7 @@
 	 (new-root-value (slot-value new root-column)))
     (unless (equal old-root-value new-root-value)
       (error "The root-key ~a has values ~a and ~a that do not match. Root key column values must match for update to proceed." root-column old-root-value new-root-value))
-    (multiple-value-bind (tables where set)
+    (multiple-value-bind (tables where set to-insert to-delete)
 	(one-to-one-update-components old new)
       (let ((components (update-components tables (mapcar #'car where) (mapcar #'car set))))
 	(multiple-value-bind (mapped-table components%)
@@ -91,46 +92,60 @@
 			   for param in params
 			   do (incf close)
 			   collect param into final-params
-			   finally (setf args (nconc args final-params))))
+			   finally (setf args `(,@args ,@final-params))))
 		       (assign-slots (preface controls)
 			 (loop
 			   for (control slot) in controls
-			   do (push (list preface slot) relevant-slots)))
-		       (process-agg-component (preface component)
-			 (with-slots (params sql param-controls) component
+			   if (consp slot)
+			     collect `(,preface ,@slot) into relevant-slots%
+			   else when slot
+				  collect `(,preface ,slot) into relevant-slots%
+			   finally (setf relevant-slots `(,@relevant-slots ,@relevant-slots%))))
+		       (process-many-to-one-component (preface component)
+			 (with-slots (params sql declarations param-controls) component
 			   (build-procedure params)
+			   (assign-slots preface param-controls)
 			   (push (apply #'format nil sql (number-range open close)) sql-list)
-			   (setf open close)
-			   (push param-controls p-controls)
-			   (map-tree-depth-first
-			    #'(lambda (slot)
-				(when (typep slot 'db-column-slot-definition)
-				  (aif (match-mapping-node base-class slot)
-				       (push (list preface (slot-value self 'mapping-slot)) relevant-slots)
-				       (push (list old slot) relevant-slots))))
-			    param-controls))))
+			   (setf open close
+				 p-controls `(,@p-controls ,@param-controls))
+			   (when declarations
+			     (loop
+			       for declaration in declarations
+			       for var = (var-var declaration)
+			       collect var into vars%
+			       collect (format nil "~a := ~a;" (var-column declaration) (car var)) into returns
+			       finally (setf vars `(,@vars ,@vars%)
+					     sql-list (nconc returns sql-list)))))))
 		(loop
 		  for table in tables
 		  for component = (gethash table components)
-		  for mapped-table = (match-mapping-node base-class table)
 		  do (etypecase component
 		       (update-component
 			(with-slots (sql set-params where-params set-controls where-controls) component
 			  (build-procedure set-params)
 			  (build-procedure where-params)
-			  (push set-controls p-controls)
-			  (push where-controls p-controls)
 			  (assign-slots :new set-controls) 
 			  (assign-slots :old where-controls) 
 			  (push (apply #'format nil sql (number-range open close)) sql-list)
-			  (setf open close)))
+			  (setf open close
+				p-controls `(,@p-controls ,@set-controls ,@where-controls))))
 		       (cons
-			(destructuring-bind (insert delete) component
-			  (process-agg-component :insert insert)
-			  (process-agg-component :delete delete))))))
-	      (setf sql-list (nreverse (push "RETURN;" sql-list))
-		    p-controls (nreverse p-controls)
-		    relevant-slots (nreverse relevant-slots)))))))
+			(loop
+			  for (preface compo) on component by #'cddr
+			  do (process-many-to-one-component preface compo)))))
+		(when to-insert
+		  (loop
+		    for table in to-insert
+		    for component = (with-active-layers (insert-table)
+				      (generate-component table nil))
+		    do (process-many-to-one-component :insert component)))
+		(when to-delete
+		  (loop
+		    for table in to-delete
+		    for component = (with-active-layers (delete-table)
+				      (generate-component table nil))
+		    do (process-many-to-one-component :delete component))))
+	      (setf sql-list (nreverse (push "RETURN;" sql-list))))))))
     procedure))
 
 
@@ -141,22 +156,40 @@ db-column-slot-definition.")
 
   (:method
       :in update-node ((old serialize) (new serialize))
-    (let* ((base-class (class-of old))
-	   (root-key-column (column (slot-value base-class 'root-key))))
+    (let ((base-class (class-of old)))
       (loop
+	with to-insert = nil
+	with to-delete = nil
 	for slot in (filter-slots-by-type base-class 'db-column-slot-definition)
 	for slot-name = (slot-definition-name slot)
-	for old-value = (when (slot-boundp old slot-name)
+	for old-boundp = (slot-boundp old slot-name)
+	for new-boundp = (slot-boundp new slot-name)
+	for old-value = (when old-boundp
 			  (slot-value old slot-name))
-	for new-value = (when (slot-boundp new slot-name)
+	for new-value = (when new-boundp
 			  (slot-value new slot-name))
+	for exceptionp = (lambda (slot)
+			   (with-slots (col-type not-null) slot
+			     (or (eq col-type :boolean)
+				 (eq not-null nil))))
 	when old-value
 	  collect (cons slot old-value) into where
+	  and unless (and new-boundp
+			  (or new-value
+			      (funcall exceptionp slot)))
+	       do (pushnew (slot-value slot 'table-class) to-delete :test #'eq)
 	when new-value
+	  if (not old-boundp)
+	       do (pushnew (slot-value slot 'table-class) to-insert :test #'eq)
+	else if (and (null old-value)
+		     (unless (funcall exceptionp slot)
+		       t))
+	       do (pushnew (slot-value slot 'table-class) to-insert :test #'eq)
+	else
 	  unless (equal new-value old-value)
 	    collect (slot-value slot 'table-class) into tables
 	    and collect (cons slot new-value) into set
-	finally (return (values tables where set))))))
+	finally (return (values tables where set to-insert to-delete))))))
 
 
 (define-layered-function one-to-many-update-components (old new)
@@ -177,15 +210,15 @@ db-aggregate-slot-definition.")
       for maps = (slot-value slot 'maps)
       for mapped-table = (mapped-table maps)
       when to-insert
-	collect (with-active-layers (insert-table)
-		  (generate-component mapped-table nil
-				      :mapping-node maps))
-	  into components%
+	collect :insert into components%
+	and collect (with-active-layers (insert-table)
+		      (generate-component maps nil))
+	      into components%
       when to-delete
-	collect (with-active-layers (delete-table)
-		  (generate-component mapped-table nil
-				      :mapping-node maps))
-	  into components%
+	collect :delete into components%
+	and collect (with-active-layers (delete-table)
+		      (generate-component maps nil))
+	      into components%
       finally (when (or to-insert to-delete)
 		(return (values mapped-table components%))))))
 
@@ -229,14 +262,15 @@ it's clone (new serialize). Applies only to update-node context.")
     (let ((components (make-hash-table :test #'eq :size (length tables))))
       (loop
 	for table in tables
-	for slots = (filter-slots-by-type table 'db-base-column-definition)
-	for component = (update-component table 
-					  (remove-if-not #'(lambda (slot)
-							     (eq table (slot-value slot 'table-class)))
-							 where)
-					  (remove-if-not #'(lambda (slot)
-							     (eq table (slot-value slot 'table-class)))
-							 set))
+	for component = (generate-component
+			 table
+			 #'(lambda (slot)
+			     (let* ((slot-name (slot-definition-name slot))
+				    (where (member slot-name (mapcar #'slot-definition-name where) :test #'eq))
+				    (set (member slot-name (mapcar #'slot-definition-name set) :test #'eq)))
+			       (cond ((and where set) t)
+				     (where :where)
+				     (set :set)))))
 	when component
 	  do (setf (gethash table components) component))
       components)))
@@ -251,37 +285,47 @@ it's clone (new serialize). Applies only to update-node context.")
   where-controls)
 
 
+(define-layered-method generate-component
+  :in-layer update-node ((class db-table-class) (allocate function) &key)
+  (with-slots (schema table) class
+    (loop
+      for slot in (filter-slots-by-type class 'db-base-column-definition)
+      for allocation = (funcall allocate slot)
+      when (or (eq allocation :set)
+	       (eq allocation t))
+	collect (column-name slot) into set-columns
+	and collect (update-param slot "set") into set-params
+	and collect (update-param-control slot) into set-controls
+      when (or (eq allocation :where)
+	       (eq allocation t))
+	collect (column-name slot) into where-columns
+	and collect (update-param slot "where") into where-params
+	and collect (update-param-control slot) into where-controls
+      finally (when set-columns
+		(return
+		  (make-update-component 
+		   :sql (format nil
+				"UPDATE ~a SET ~{~a = $~~a~^, ~} WHERE ~{~a = $~~a~^ AND ~};"
+				(set-sql-name schema table) set-columns where-columns)
+		   :set-params set-params
+		   :where-params where-params
+		   :set-controls set-controls
+		   :where-controls where-controls))))))
 
-(define-layered-function update-component (class where set)
 
+
+(define-layered-function update-param (slot preface)
   (:method
-      :in-layer update (table where set)
-    nil)
+      :in update ((slot db-column-slot-definition) preface)
+    (with-slots (schema column-name domain) slot
+      (if (string= preface "set")
+	  (list :inout (format nil "~a_~a" preface column-name) (set-sql-name schema domain))
+	  (list (set-sql-name schema domain))))))
 
+
+(define-layered-function update-param-control (slot)
   (:method
-      :in-layer update ((class db-table-class) (where cons) (set cons))
-    (with-slots (schema table) class
-      (let* ((set-columns (mapcar #'column-name set))
-	     (where-columns (mapcar #'column-name where)))
-	(make-update-component 
-	 :sql (format nil
-		      "UPDATE ~a SET ~{~a = $~~a~^, ~} WHERE ~{~a = $~~a~^ AND ~};"
-		      (set-sql-name schema table)
-		      set-columns
-		      where-columns)
-	 :set-params (mapcar #'(lambda (slot)
-				 (list :inout (format nil "set_~a" (column-name slot)) (set-sql-name schema (domain slot))))
-			     set)
-	 :where-params (mapcar #'(lambda (slot)
-				   (list :in (format nil "where_~a" (column-name slot)) (set-sql-name schema (domain slot))))
-			       where)
-	 :set-controls (update-param-controls set)
-	 :where-controls (update-param-controls where))))))
-
-
-(defun update-param-controls (list)
-  (loop
-    for slot in list
-    collect (list (format nil "~~a::~a"
-			  (set-sql-name (slot-value slot 'schema) (slot-value slot 'domain)))
-		  slot)))
+      :in update ((slot db-column-slot-definition))
+    (list (format nil "~~a::~a"
+		  (set-sql-name (slot-value slot 'schema) (slot-value slot 'domain)))
+	  slot)))

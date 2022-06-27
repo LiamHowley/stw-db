@@ -21,7 +21,7 @@
     (setf sql-statement
 	  (format nil "CREATE OR REPLACE PROCEDURE ~a (~a)~%LANGUAGE plpgsql~%AS $BODY$~%~a~%BEGIN~%~a~%END;~%$BODY$;"
 		  (set-sql-name schema name)
-		  (format nil "~@[~{~{~a ~a~@[ ~a~]~}~^, ~}~]" args)
+		  (format nil "~@[~{~{~a~^ ~}~^, ~}~]" args)
 		  (format nil "~@[DECLARE~%~{~{~a ~a~@[ := ~a~];~}~%~}~]" vars)
 		  (format nil "~{~a~^~%~}" sql-list)))
     class))
@@ -137,13 +137,7 @@ from an instance of serialize, with which to query a database.")
 							     (car control))
 							    (control "~a")
 							    (t "null")))
-						  p-controls)))))
-  (:method
-      :in update-node ((procedure procedure))
-    (with-slots (schema name p-control p-controls) procedure
-      (setf p-control (format nil "CALL ~a.~a (~@[~{~a~^, ~}~])"
-			      schema name (map-tree-depth-first #'stringp p-controls))))))
-
+						  p-controls))))))
 
 
 
