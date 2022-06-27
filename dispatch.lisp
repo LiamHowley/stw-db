@@ -1,6 +1,5 @@
 (in-package stw.db)
 
-
 (define-layered-function (setf proc-template) (new-value class component &rest rest &key &allow-other-keys)
   (:documentation "Cache procedure in hash-table. Hash table is context dependent and derived from
 calling db-template-register.")
@@ -115,18 +114,15 @@ to class(es).")
 		 for field across fields
 		 for symbol-name = (get-symbol-name (field-name field))
 		 for slot-name = (intern symbol-name (symbol-package (class-name base-class)))
-		 for slot = (find-slot-definition (class-of class) slot-name 'db-aggregate-slot-definition)
 		 do (let ((next-field (next-field field)))
 		      (unless (eq next-field :null)
-			(when (find-slot-definition base-class slot-name 'db-base-column-definition)
+			(awhen (find-slot-definition base-class slot-name 'db-base-column-definition)
 			  (setf (slot-value node slot-name)
-				(if slot
-				    (let ((slot-type (slot-definition-type slot)))
-				      (if (or (eq slot-type 'list)
-					      (eq slot-type 'cons))
-					  (array-to-list next-field)
-					  next-field))
-				    next-field))))))
+				(let ((slot-type (slot-definition-type self)))
+				  (cond ((or (eq slot-type 'list)
+					     (eq slot-type 'cons))
+					 (array-to-list next-field))
+					(t next-field))))))))
 	    collect node into nodes
 	    finally (return (if (eql i 0) node nodes))))))))
 
@@ -222,14 +218,14 @@ A database can be built from scratch by invoking any CRUD query.")
     `(dispatch-statement ,class ,procedure)))
 
 
-(define-layered-function match-mapping-node (class table)
+(define-layered-function match-mapping-node (class table/slot)
   (:documentation "Confirms class maps table, and returns the 
 relevant instance of SLOT-MAPPING.")
 
   (:method
-    :in-layer db-layer ((class db-interface-class) table)
+    :in-layer db-layer ((class db-interface-class) table/slot)
     (loop
-      for mapping in (slot-value table 'mapped-by)
+      for mapping in (slot-value table/slot 'mapped-by)
       when (eq (mapping-node mapping) class)
 	do (return mapping))))
 
@@ -245,14 +241,8 @@ relevant instance of SLOT-MAPPING.")
 			  col-type)))
 	(setf col-type
 	      (case col-type
-		((:boolean :bool)
-		 :boolean)
 		((:text :varchar :char)
 		 :text)
-		((:integer :small-int :big-int :int :int4 :int8 :int2)
-		 :integer)
-		((:float :float8 :float4 :real :numeric :decimal)
-		 :float)
 		(t col-type)))
       (prepare-value slot col-type value parenthesize))))
 
@@ -272,61 +262,15 @@ E.g. :text :varchar :integer etc. The use of parenthesize, indicates whether the
 construct of having the values in a composite typed array enwrapped in parenthesis.")
 
   (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :boolean)) value parenthesize)
-    (declare (ignore slot col-type parenthesize))
-    (if (eq value t) "'t'" "'f'"))
-
-  (:method
       :in db-layer ((slot db-column-slot-definition) (col-type (eql :text)) (value string) parenthesize)
-    (if parenthesize
-	(concatenate 'string "'(" value ")'")
-	(concatenate 'string "'" value "'")))
-
-  (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :varchar)) (value string) parenthesize)
-    (prepare-value slot :text value parenthesize))
-
-  (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :char)) (value string) parenthesize)
-    (prepare-value slot :text value parenthesize))
-
-
-  ;;; numeric
-  (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :integer)) (value string) parenthesize)
-    (declare (ignore slot col-type parenthesize))
-    (parse-integer value))
-
-  (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :integer)) (value float) parenthesize)
-    (declare (ignore slot col-type parenthesize))
-    (round value))
-
-  (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :float)) (value integer) parenthesize)
-    (declare (ignore slot col-type parenthesize))
-    (float value))
-
-  (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :float)) (value string) parenthesize)
-    (declare (ignore slot col-type parenthesize))
-    (float value))
-
-
-  (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :array)) (value cons) parenthesize)
-    (declare (ignore slot col-type parenthesize))
-    (format nil "'{~{~s~^, ~}}'" value))
-
-  (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :array)) (value array) parenthesize)
-    (prepare-value slot :array (array-to-list value) parenthesize))
-
+      (if parenthesize
+	  (concatenate 'string "'(\"" value "\")'")
+	  (concatenate 'string "'\"" value "\"'")))
 
   ;;; the rest
   (:method
       :in db-layer ((slot db-column-slot-definition) col-type value parenthesize)
     (declare (ignore col-type parenthesize))
-    (cond (value value)
-	  ((slot-valude slot 'default)
+    (cond (value (to-sql-string value))
+	  ((slot-value slot 'default)
 	   "null"))))
