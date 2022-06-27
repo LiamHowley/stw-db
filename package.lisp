@@ -72,7 +72,8 @@
 		:ignore-row-reader
 		:next-row
 		:next-field
-		:field-name)
+		:field-name
+		:to-sql-string)
   (:import-from :atomics
 		:implementation-not-supported
 		:atomic-pop
@@ -80,6 +81,10 @@
   (:import-from :bordeaux-threads
   		:make-lock
   		:with-lock-held)
+  (:import-from :local-time
+		:now
+		:universal-to-timestamp
+		:set-local-time-cl-postgres-readers)
   (:export :define-db-table
 	   :define-key-table
 	   :define-interface-node
@@ -158,3 +163,6 @@
 	   :invalid-operator-error))
 
 (in-package :stw.db)
+
+;;; setting date/time readers to use local-time
+(set-local-time-cl-postgres-readers)

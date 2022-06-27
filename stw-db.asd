@@ -3,7 +3,9 @@
 		 "stw-utils"
 		 "cl-postgres"
 		 "bordeaux-threads"
-		 "atomics")
+		 "atomics"
+		 "local-time"
+		 "cl-postgres+local-time")
     :description ""
     :serial t
     :components ((:file "package")
