@@ -128,8 +128,8 @@ to class(es).")
 
 
 
-(define-layered-function execute (class component &rest rest &key &allow-other-keys)
-  (:documentation "Generates and executes a database query according to the layered context, 
+(define-layered-function sync (class component &rest rest &key &allow-other-keys)
+  (:documentation "Generates and syncs a database query according to the layered context, 
 class, table component and other args. Specifying a table component results in insert/delete 
 queries that operate only on that table/component, otherwise, all tables are queried. 
 To update, create a clone of class, update relevant values in the clone, and pass the 
@@ -139,7 +139,7 @@ the refresh-cache keyword to T.
 
 Database errors as they occur are passed through a handler-case form, which tests for
 database-error-code. Missing schemas, missing types, tables, and constraints, are all
-captured and resolved, before a recursive call is made to execute on the initial args.
+captured and resolved, before a recursive call is made to sync on the initial args.
 A database can be built from scratch by invoking any CRUD query.")
 
   (:method
@@ -165,14 +165,14 @@ A database can be built from scratch by invoking any CRUD query.")
 				  functions)
 			 (exec statement)
 			 (exec (slot-value procedure 'p-control)))
-		       (apply #'execute class component rest)))
+		       (apply #'sync class component rest)))
 	      (scase (database-error-code err)
 		     ("3F000"
 		      ;; MISSING SCHEMA
 		      ;; Response: Create schema and recurse
 		      (exec (create-schema schema))
 		      (exec (set-schema schema))
-		      (apply #'execute class component rest))
+		      (apply #'sync class component rest))
 		     ("42704"
 		      ;; MISSING TYPE
 		      ;; Response: Create types for all relevant
@@ -191,7 +191,7 @@ A database can be built from scratch by invoking any CRUD query.")
 		      ;; MISSING PROCEDURE
 		      ;; Response: Make procedure and recurse.
 		      (exec (sql-statement procedure))
-		      (apply #'execute class component rest))
+		      (apply #'sync class component rest))
 		     (t (error err)))))))))
 
   (:method

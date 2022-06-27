@@ -116,7 +116,7 @@
 	   :db-aggregate-slot-definition
 
 	   ;; ops
-	   :execute
+	   :sync
 	   :read-row-to-class
 
 	   ;; template dispatch and caching

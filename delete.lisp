@@ -1,7 +1,7 @@
 (in-package stw.db)
 
 
-(define-layered-method execute
+(define-layered-method sync
   :in delete-node
   :around ((class serialize) component &rest rest &key)
   (call-next-method)

@@ -78,7 +78,7 @@
 								(date/time-p (slot-value slot 'col-type))))))))
     (push slots rest)))
 
-(define-layered-method execute
+(define-layered-method sync
   :in retrieve-node
   ((class serialize) component &rest rest 
    &key optional-join union-queries union-all-queries having group-by (order-by `(,(column-name (column (root-key (class-of class)))))) limit)

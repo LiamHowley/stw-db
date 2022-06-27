@@ -102,18 +102,18 @@
 			   do (incf close)
 			   collect param into final-params
 			   finally (setf args `(,@args ,@final-params))))
-		       (assign-slots (preface controls)
+		       (assign-slots (prefix controls)
 			 (loop
 			   for (control slot) in controls
 			   if (consp slot)
-			     collect `(,preface ,@slot) into relevant-slots%
+			     collect `(,prefix ,@slot) into relevant-slots%
 			   else when slot
-				  collect `(,preface ,slot) into relevant-slots%
+				  collect `(,prefix ,slot) into relevant-slots%
 			   finally (setf relevant-slots `(,@relevant-slots ,@relevant-slots%))))
-		       (process-many-to-one-component (preface component)
+		       (process-many-to-one-component (prefix component)
 			 (with-slots (params sql declarations param-controls) component
 			   (build-procedure params)
-			   (assign-slots preface param-controls)
+			   (assign-slots prefix param-controls)
 			   (push (apply #'format nil sql (number-range open close)) sql-list)
 			   (setf open close
 				 p-controls `(,@p-controls ,@param-controls))
@@ -140,8 +140,8 @@
 				p-controls `(,@p-controls ,@set-controls ,@where-controls))))
 		       (cons
 			(loop
-			  for (preface compo) on component by #'cddr
-			  do (process-many-to-one-component preface compo)))))
+			  for (prefix compo) on component by #'cddr
+			  do (process-many-to-one-component prefix compo)))))
 		(when to-insert
 		  (loop
 		    for table in to-insert
@@ -331,12 +331,12 @@ it's clone (new serialize). Applies only to update-node context.")
 
 
 
-(define-layered-function update-param (slot preface)
+(define-layered-function update-param (slot prefix)
   (:method
-      :in update ((slot db-column-slot-definition) preface)
+      :in update ((slot db-column-slot-definition) prefix)
     (with-slots (schema column-name domain) slot
-      (if (string= preface "set")
-	  (list :inout (format nil "~a_~a" preface column-name) (set-sql-name schema domain))
+      (if (string= prefix "set")
+	  (list :inout (format nil "~a_~a" prefix column-name) (set-sql-name schema domain))
 	  (list (set-sql-name schema domain))))))
 
 

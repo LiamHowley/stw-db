@@ -111,10 +111,10 @@ and not null. Returns a boolean.")
 
 
 
-(defun declared-var (table column &optional preface)
+(defun declared-var (table column &optional prefix)
   (with-slots (col-type column-name) column
     (let ((col-type% (if (eq col-type :serial) :integer col-type))
-	  (column-param (format nil "~@[~a~]_~a" preface column-name)))
+	  (column-param (format nil "~@[~a~]_~a" prefix column-name)))
       (make-var
        :column column-param
        :var (list (format nil "_~a_~a" (db-syntax-prep table) column-name) col-type% nil)
