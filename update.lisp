@@ -25,15 +25,14 @@
   (flet ((process-fields (field next-field)
 	   (let* ((base-class (class-of class))
 		  (pos (search "_" field))
-		  (symbol-name (string-upcase (substitute #\- #\_ (subseq field (1+ pos)))))
+		  (amended (substitute #\- #\_ field))
+		  (symbol-name (string-upcase (or (when pos (subseq amended (1+ pos)))
+						  amended)))
 		  (slot-name (intern symbol-name (symbol-package (class-name base-class)))))
 	     (scase (subseq field 0 pos)
-		    ("set"
-		     (when (find-slot-definition base-class slot-name 'db-column-slot-definition)
-		       (setf (slot-value class slot-name) next-field)))
 		    ("insert"
 		     (awhen (find-slot-definition base-class slot-name 'db-aggregate-slot-definition)
-		       (let ((list (explode-string next-field '("{(" "),(" ")}") :remove-separators t)))
+		       (let ((list (explode-string next-field '("{(" ")(" ")}" "),\"(\\\"" "\\\")\"}") :remove-separators t)))
 			 (loop
 			   for value in list
 			   do (case (slot-definition-type self)
@@ -42,11 +41,21 @@
 				(t
 				 (push value (slot-value class slot-name))))))))
 		    ("delete"
-		     (awhen (find-slot-definition base-class slot-name 'db-aggregate-slot-definition)
-		       (loop
-			 for value across next-field
-			 do (setf (slot-value class slot-name)
-				  (remove value (slot-value class slot-name) :test #'equal)))))))))
+		     (let ((slot (find-slot-definition base-class slot-name 'db-base-column-definition)))
+		       (etypecase slot
+			 (db-aggregate-slot-definition
+			  (let* ((trimmed (string-trim '(#\{ #\}) next-field))
+				 (list (explode-string trimmed '(",\"" #\") :remove-separators t)))
+			    (loop
+			      for value in list
+			      do (setf (slot-value class slot-name)
+				       (remove value (slot-value class slot-name) :test #'equal)))))
+			 (db-column-slot-definition
+			  (when (equal next-field (slot-value class slot-name))
+			    (setf (slot-value class slot-name) nil))))))
+		    (t
+		     (awhen (find-slot-definition base-class slot-name 'db-column-slot-definition)
+		       (setf (slot-value class slot-name) next-field)))))))
     (row-reader (fields)
       (loop
 	while (next-row)
@@ -234,23 +243,31 @@ it's clone (new serialize). Applies only to update-node context.")
       (apply #'format nil p-control
 	     (loop
 	       for (symbol slot) in relevant-slots
-	       for slot-name = (slot-definition-name slot)
-	       if (typep slot 'db-column-slot-definition)
-		 collect (prepare-value% slot (slot-value (if (eq symbol :old) old new) slot-name))
-	       else 
-		 collect (let* ((old-values (slot-value old slot-name))
+	       for mapped = (match-mapping-node (class-of old) slot)
+	       if mapped
+		 collect (let* ((slot-name (slot-definition-name (mapping-slot mapped)))
+				(old-values (slot-value old slot-name))
 				(new-values (slot-value new slot-name))
-				(column (mapped-column (slot-value slot 'maps))))
+				(column (mapped-column mapped)))
 			   (if (eq symbol :insert)
 			       (loop
 				 for value in (set-difference new-values old-values :test #'equal)
 				 collect (prepare-value% column value t))
 			       (loop
 				 for value in (set-difference old-values new-values :test #'equal)
-				 collect (prepare-value% column value)))))))))
-				
-		 
-	       
+				 collect (prepare-value% column value))))
+	       else 
+		 collect (prepare-value% slot
+					 (slot-value (if (or (eq symbol :old)
+							     (eq symbol :delete))
+							 old
+							 new)
+						     (slot-definition-name slot))
+					 (when (eq symbol :insert)
+					   t)))))))
+
+
+
 (define-layered-function update-components (tables where set)
 
   (:method
