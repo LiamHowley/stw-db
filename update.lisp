@@ -171,12 +171,14 @@ db-column-slot-definition.")
 	with to-delete = nil
 	for slot in (filter-slots-by-type base-class 'db-column-slot-definition)
 	for slot-name = (slot-definition-name slot)
-	for old-boundp = (slot-boundp old slot-name)
-	for new-boundp = (slot-boundp new slot-name)
+	for old-boundp = (unless (lock-value slot)
+			   (slot-boundp old slot-name))
+	for new-boundp = (unless (lock-value slot)
+			   (slot-boundp new slot-name))
 	for old-value = (when old-boundp
 			  (slot-value old slot-name))
 	for new-value = (when new-boundp
-			  (slot-value new slot-name))
+			    (slot-value new slot-name))
 	for exceptionp = (lambda (slot)
 			   (with-slots (col-type not-null) slot
 			     (or (eq col-type :boolean)

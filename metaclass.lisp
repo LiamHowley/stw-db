@@ -101,7 +101,8 @@ Set as alist ((COLUMN . VALUE))")))
    (referenced :initarg :referenced :initform nil :type boolean)
    (value :initarg :value :initform nil)
    (mapped-by :initform nil :reader mapped-by)
-   (column-name :reader column-name)))
+   (column-name :reader column-name)
+   (lock-value :initarg :lock-value :initform nil :reader lock-value)))
 
 
 
@@ -190,22 +191,19 @@ with a single column of type serial."))
   :in db-table-layer ((slot db-column-slot-definition)
 		      &key col-type check primary-key foreign-key root-key &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
-
+    (when (eq col-type 'serial)
+      (setf (slot-value slot 'lock-value) t))
     (flet ((process-primary-key ()
 	     (unless (eq col-type 'serial)
 	       (setf (slot-value slot 'not-null) t))))
-
       (when root-key
 	(setf (slot-value slot 'primary-key) t)
 	(process-primary-key))
-
       (when primary-key
 	(process-primary-key)))
-
     (when check
       (setf (slot-value slot 'check)
 	    (infill-column check slot-name)))
-
     (when foreign-key
       (let ((schema (getf foreign-key :schema)))
 	(setf (slot-value slot 'foreign-key)

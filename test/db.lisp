@@ -25,6 +25,7 @@
    (password :col-type :text
 	     :not-null t)
    (created-on :col-type :timestamptz
+	       :lock-value t
 	       :default (now))
    (created-by :col-type :integer
 	       :not-null t
