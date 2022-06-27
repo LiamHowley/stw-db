@@ -1,14 +1,16 @@
 (in-package stw.db)
 
-(define-layered-method get-key
-  :in delete-from ((class serialize) component &rest rest &key)
-(class-name (class-of class)))
+
+(define-layered-method execute
+  :in delete-node
+  :around ((class serialize) component &rest rest &key)
+  (call-next-method)
+  (setf class nil))
 
 
-(define-layered-method read-row-to-class
-  :in delete-from ((class serialize))
-  (declare (ignore class))
-  'ignore-row-reader)
+(define-layered-method parenthesize
+  :in delete-node ((slots cons))
+  nil)
 
 
 (define-layered-method generate-procedure
@@ -20,6 +22,7 @@
 	  (format nil "~(~a~)_delete" 
 		  (db-syntax-prep (class-name component))))
     procedure))
+
 
 
 (define-layered-method generate-procedure
