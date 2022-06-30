@@ -261,7 +261,7 @@ it's clone (new serialize). Applies only to update-node context.")
 				 collect (prepare-value% column value t))
 			       (loop
 				 for value in (set-difference old-values new-values :test #'equal)
-				 collect (prepare-value% column value))))
+				 collect (prepare-value% column value t))))
 	       else 
 		 collect (prepare-value% slot
 					 (slot-value (if (or (eq symbol :old)

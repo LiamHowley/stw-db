@@ -139,27 +139,35 @@ have no value.")
 (define-layered-method generate-component
   :in delete-table ((map slot-mapping) function &key)
   (declare (ignore function))
-  (let ((mapped-column (slot-definition-name (mapped-column map)))
-	(class (mapped-table map)))
-    (with-slots (primary-keys schema table) class
-      (let ((table-name (set-sql-name schema table)))
+  (let ((class (mapped-table map))
+	(mapped-column (slot-definition-name (mapped-column map)))
+	(typed-array-name (format nil "delete_~(~a~)" (slot-definition-name (mapping-slot map)))))
+    (with-slots (primary-keys schema table require-columns) class
+      (let ((table-name (set-sql-name schema table))
+	    (type-array (format nil "~a.~a_type[]" schema table)))
 	(loop 
 	  for column in (filter-slots-by-type class 'db-column-slot-definition)
 	  for column-name = (slot-value column 'column-name)
 	  for domain = (slot-value column 'domain)
+	  with require-column = nil
 	  if (eq (slot-definition-name column) mapped-column)
-	    collect (list :inout
-			  (format nil "delete_~(~a~)" (slot-definition-name (mapping-slot map)))
-			  (format nil "~a[]" (set-sql-name schema domain)))
-	      into args
-	      and collect (format nil "~a IN (SELECT UNNEST ($~~a))" column-name) into where
-	      and collect (list "ARRAY[~{~a~^, ~}]" column) into p-controls
+	    do (setf require-column column-name)
+	    and collect column-name into required-columns
+	  else
+	    if (member column require-columns :test #'equality)
+	      collect column-name into required-columns
 	  else
 	    collect (list (set-sql-name schema domain)) into args
 	    and collect `("~a" ,column) into p-controls
-	    and collect (format nil "~a = $~~a" column-name) into where
+	    and collect column-name into where
 	  finally (return
 		    (make-component
-		     :sql (format nil "DELETE FROM ~a WHERE ~{~a~^ AND~% ~};" table-name where)
-		     :params args
-		     :param-controls p-controls)))))))
+		     :sql (format nil "DELETE FROM ~a WHERE ~{~a~^ AND~% ~};"
+				  table-name
+				  `(,@(mapcar #'(lambda (column-name)
+						  (format nil "~a = $~~a" column-name))
+					      where)
+				    ,(format nil "~a IN (SELECT ~{~a~^, ~} FROM UNNEST ($~~a))"
+					     require-column required-columns)))
+		     :params `(,@args (:inout ,typed-array-name ,type-array))
+		     :param-controls `(,@p-controls ,(sql-typed-array class)))))))))
