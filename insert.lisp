@@ -250,11 +250,11 @@ and not null. Returns a boolean.")
 	(loop
 	  for slot in (filter-slots-by-type table-class 'db-column-slot-definition)
 	  for column-name = (slot-value slot 'column-name)
-	  for column-type = (slot-value slot 'col-type)
+	  for domain = (slot-value slot 'domain)
 	  if (member slot require-columns :test #'equality)
 	    collect column-name into required-columns
 	  else
-	    collect (list column-type) into args
+	    collect (list (set-sql-name schema domain)) into args
 	    and collect "$~a" into required-columns
 	    and collect `("~a" ,slot) into p-controls
 	  collect column-name into columns
@@ -277,7 +277,7 @@ and not null. Returns a boolean.")
       (loop
 	for slot in (filter-slots-by-type class 'db-column-slot-definition)
 	for column-name = (slot-value slot 'column-name)
-	for column-type = (slot-value slot 'col-type)
+	for domain = (slot-value slot 'domain)
 	for declared-var = (when (member slot require-columns :test #'equality)
 			     (declared-var table slot))
 	if declared-var
@@ -288,7 +288,7 @@ and not null. Returns a boolean.")
 	  and collect (var-param declared-var) into out-args
 	  and collect nil into out-values
 	else
-	  collect (list column-type) into args
+	  collect (list domain) into args
 	  and collect "$~a" into required-columns
 	  and collect `("~a" ,slot) into p-controls
 	collect column-name into columns

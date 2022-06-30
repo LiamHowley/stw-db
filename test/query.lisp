@@ -1,6 +1,7 @@
 (in-package stw.db.test)
 
-(defparameter *account*
+
+(defparameter *new-account*
   (make-instance 'account
 		 :url "foo.com"
 		 :name "foo"
