@@ -263,7 +263,7 @@
 	  (of-type stw.db::procedure procedure)
 	  (is equal
 	      '((:OUT "_id" :INTEGER) (:OUT "_user_id" :INTEGER)
-		(:IN "stw_test_schema.user_email_type[]" NIL))
+		(:IN "stw_test_schema.user_email_type[]"))
 	      (slot-value procedure 'stw.db::args))
 	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[(~a)]::stw_test_schema.user_email_type[])"
 	      (slot-value procedure 'stw.db::p-control))
@@ -289,8 +289,8 @@
 	    (of-type stw.db::procedure procedure)
 	    (is equal
 		'((:INOUT "set_email" "stw_test_schema.user_email_email")
-		  (:IN "where_email" "stw_test_schema.user_email_email")
-		  (:IN "where_id" "stw_test_schema.user_email_id"))
+		  ("stw_test_schema.user_email_email")
+		  ("stw_test_schema.user_email_id"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
 		"CALL stw_test_schema.account_update (~a::stw_test_schema.user_email_email, ~a::stw_test_schema.user_email_email, ~a::stw_test_schema.user_email_id)"
@@ -310,7 +310,7 @@
 		"CALL stw_test_schema.user_site_insert (~a, ARRAY[~{(~a)~^, ~}]::stw_test_schema.user_site_type[])"
 		(slot-value procedure 'stw.db::p-control))
 	    (is equal
-		'((:IN "insert_id" :INTEGER) (:INOUT "insert_sites" "stw_test_schema.user_site_type[]"))
+		'(("stw_test_schema.user_site_id") (:inout "insert_sites" "stw_test_schema.user_site_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
 		"CALL stw_test_schema.user_site_insert (1, ARRAY[('(\"foo.com\")'), ('(\"bar.com\")'), ('(\"baz.com\")')]::stw_test_schema.user_site_type[])"
@@ -320,13 +320,13 @@
 	  (let ((procedure (generate-procedure *account* (find-class 'user-site))))
 	    (of-type stw.db::procedure procedure)
 	    (is string=
-		"CALL stw_test_schema.user_site_delete (~a, ARRAY[~{~a~^, ~}])"
+		"CALL stw_test_schema.user_site_delete (~a, ARRAY[~{(~a)~^, ~}]::stw_test_schema.user_site_type[])"
 		(slot-value procedure 'stw.db::p-control))
 	    (is equal
-		'((:IN "_id" :INTEGER) (:INOUT "delete_sites" "TEXT[]"))
+		'(("stw_test_schema.user_site_id") (:INOUT "delete_sites" "stw_test_schema.user_site_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw_test_schema.user_site_delete (1, ARRAY['(foo.com)', '(bar.com)', '(baz.com)'])"
+		"CALL stw_test_schema.user_site_delete (1, ARRAY[('(\"foo.com\")'), ('(\"bar.com\")'), ('(\"baz.com\")')]::stw_test_schema.user_site_type[])"
 		(dispatch-statement *account* procedure))))))))
 
 
@@ -341,10 +341,10 @@
 	  '((:IN "_email" "stw_test_schema.user_email_email"))
 	  (slot-value function 'stw.db::args))
       (is string=
-	  "user_retrievec3$1$$2$$3$$4$"
+	  "user_retrievec3$1$2$3$4$5$6$7"
 	  (slot-value function 'stw.db::name))
       (is string=
-	  "SELECT * FROM stw_test_schema.user_retrievec3$1$$2$$3$$4$ (~a::stw_test_schema.user_email_email)"
+	  "SELECT * FROM stw_test_schema.user_retrievec3$1$2$3$4$5$6$7 (~a::stw_test_schema.user_email_email)"
 	  (slot-value function 'stw.db::p-control))
       (is string=
 	  "SELECT stw_test_schema.user_base.id, stw_test_schema.user_id.user_id, stw_test_schema.user_email.email FROM stw_test_schema.user_base INNER JOIN stw_test_schema.user_id ON (stw_test_schema.user_base.id = stw_test_schema.user_id.id) INNER JOIN stw_test_schema.user_email ON (stw_test_schema.user_id.id = stw_test_schema.user_email.id AND stw_test_schema.user_id.user_id = stw_test_schema.user_email.user_id) WHERE stw_test_schema.user_email.email = $1;"

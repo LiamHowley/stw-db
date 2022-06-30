@@ -10,13 +10,23 @@
   (:import-from
    :cl-postgres
    :database-connection)
+  (:import-from
+   :local-time
+   :timestamp)
   (:shadow
    :define-db-table
    :define-key-table)
-  (:export :stw-db))
+  (:export :run-tests))
 
 (in-package stw.db.test)
 
 (define-test stw-db)
+
+(defmacro run-tests ()
+  `(prog1
+       (test 'stw-db)
+     (db-connect db (db-layer)
+       (drop-schema *schema* t))))
+
 
 (defparameter *schema* "stw_test_schema")
