@@ -265,7 +265,7 @@ construct of having the values in a composite typed array enwrapped in parenthes
       :in db-layer ((slot db-column-slot-definition) (col-type (eql :text)) (value string) parenthesize)
       (if parenthesize
 	  (concatenate 'string "'(\"" value "\")'")
-	  (concatenate 'string "'\"" value "\"'")))
+	  (concatenate 'string "E'" value "'")))
 
   ;;; the rest
   (:method

@@ -255,8 +255,8 @@
 	  do (of-type 'db-column-slot-definition slot))
 
 	(let ((foo-slot-definition (find-slot-definition (class-of *account*) 'handle 'db-column-slot-definition)))
-	  (is string= "'(foo)'" (stw.db::prepare-value% foo-slot-definition (slot-value *account* 'handle) t))
-	  (is string= "'foo'" (stw.db::prepare-value% foo-slot-definition (slot-value *account* 'handle)))))
+	  (is string= "'(\"foo\")'" (stw.db::prepare-value% foo-slot-definition (slot-value *account* 'handle) t))
+	  (is string= "E'foo'" (stw.db::prepare-value% foo-slot-definition (slot-value *account* 'handle)))))
 
       (with-active-layers (insert-node)
 	(let ((procedure (generate-procedure *user* nil)))
@@ -267,7 +267,7 @@
 	      (slot-value procedure 'stw.db::args))
 	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[(~a)]::stw_test_schema.user_email_type[])"
 	      (slot-value procedure 'stw.db::p-control))
-	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[('(liam@foobar.com)')]::stw_test_schema.user_email_type[])"
+	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[('(\"liam@foobar.com\")')]::stw_test_schema.user_email_type[])"
 	      (dispatch-statement *user* procedure))))
 
       (setf (slot-value *account* 'email) "foo@bar.com")
@@ -296,7 +296,7 @@
 		"CALL stw_test_schema.account_update (~a::stw_test_schema.user_email_email, ~a::stw_test_schema.user_email_email, ~a::stw_test_schema.user_email_id)"
 		(slot-value procedure 'stw.db::p-control))
 	    (is string=
-		"CALL stw_test_schema.account_update ('bar@foo.com'::stw_test_schema.user_email_email, 'foo@bar.com'::stw_test_schema.user_email_email, 1::stw_test_schema.user_email_id)"
+		"CALL stw_test_schema.account_update (E'bar@foo.com'::stw_test_schema.user_email_email, E'foo@bar.com'::stw_test_schema.user_email_email, 1::stw_test_schema.user_email_id)"
 		(update-op-dispatch-statement *account* clone procedure)))))
       
       (let ((format-components (stw.db::sql-typed-array (find-class 'user-site))))
@@ -313,7 +313,7 @@
 		'((:IN "insert_id" :INTEGER) (:INOUT "insert_sites" "stw_test_schema.user_site_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw_test_schema.user_site_insert (1, ARRAY[('(foo.com)'), ('(bar.com)'), ('(baz.com)')]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_insert (1, ARRAY[('(\"foo.com\")'), ('(\"bar.com\")'), ('(\"baz.com\")')]::stw_test_schema.user_site_type[])"
 		(dispatch-statement *account* procedure))))
 	
 	(with-active-layers (delete-table)

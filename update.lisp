@@ -32,7 +32,8 @@
 	     (scase (subseq field 0 pos)
 		    ("insert"
 		     (awhen (find-slot-definition base-class slot-name 'db-aggregate-slot-definition)
-		       (let ((list (explode-string next-field '("{(" ")(" ")}" "),\"(\\\"" "\\\")\"}") :remove-separators t)))
+		       (let ((list (explode-string next-field '("{(" "),(" ")(" ")}" "),\"(\\\"" "\\\")\"}")
+						   :remove-separators t)))
 			 (loop
 			   for value in list
 			   do (case (slot-definition-type self)
@@ -41,11 +42,11 @@
 				(t
 				 (push value (slot-value class slot-name))))))))
 		    ("delete"
-		     (let ((slot (find-slot-definition base-class slot-name 'db-base-column-definition)))
-		       (etypecase slot
+		     (awhen (find-slot-definition base-class slot-name 'db-base-column-definition)
+		       (etypecase self
 			 (db-aggregate-slot-definition
-			  (let* ((trimmed (string-trim '(#\{ #\}) next-field))
-				 (list (explode-string trimmed '(",\"" #\") :remove-separators t)))
+			  (let ((list (explode-string next-field '("{(" "),(" ")(" ")}" "),\"(\\\"" "\\\")\"}")
+						      :remove-separators t)))
 			    (loop
 			      for value in list
 			      do (setf (slot-value class slot-name)
@@ -55,7 +56,10 @@
 			    (setf (slot-value class slot-name) nil))))))
 		    (t
 		     (awhen (find-slot-definition base-class slot-name 'db-column-slot-definition)
-		       (setf (slot-value class slot-name) next-field)))))))
+		       (setf (slot-value class slot-name)
+			     (if (stringp next-field)
+				 (string-trim '(#\") next-field)
+				 next-field))))))))
     (row-reader (fields)
       (loop
 	while (next-row)
