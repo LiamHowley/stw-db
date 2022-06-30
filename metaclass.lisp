@@ -218,7 +218,7 @@ with a single column of type serial."))
 
 (defun sort-tables (backtrace-alist)
   (let ((acc))
-    (stw.util:map-tree-depth-first
+    (map-tree-depth-first
      #'(lambda (item)
 	 (cond ((member item acc)
 		nil)
