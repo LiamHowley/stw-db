@@ -288,7 +288,7 @@ and not null. Returns a boolean.")
 	  and collect (var-param declared-var) into out-args
 	  and collect nil into out-values
 	else
-	  collect (list domain) into args
+	  collect (list (set-sql-name schema domain)) into args
 	  and collect "$~a" into required-columns
 	  and collect `("~a" ,slot) into p-controls
 	collect column-name into columns
