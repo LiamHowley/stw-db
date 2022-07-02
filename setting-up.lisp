@@ -5,7 +5,6 @@
 
 (define-layered-function clause (class))
 
-
 ;;; schema
 
 (define-layered-function create-schema (schema)
@@ -77,26 +76,25 @@
 
 (define-layered-method clause
   :in-layer db-table-layer ((column db-column-slot-definition))
-  (let ((column-name (db-syntax-prep (slot-definition-name column))))
-    (with-slots (col-type not-null unique default) column
-      (format nil "~(~a~) ~{~a~}"
-	      (db-syntax-prep column-name)
-	      (list 
-	       (format nil "~a" col-type)
-	       (if not-null " NOT NULL" "")
-	       (if (eq unique t) " UNIQUE" "")
-	       (typecase default
-		 (cons
-		  (format nil " DEFAULT ~a(~@[~{~a~^, ~}~])" (car default) (cdr default)))
-		 (integer
-		  (format nil " DEFAULT ~a" default))
-		 (string
-		  (format nil " DEFAULT '~a'" default))
-		 (boolean
-		  (if (eq col-type :boolean)
-		      (format nil " DEFAULT '~a'" (if (eq default t) "t" "f"))
-		      ""))
-		 (t "")))))))
+  (with-slots (column-name col-type not-null unique default) column
+    (format nil "~(~a~) ~{~a~}"
+	    column-name
+	    (list 
+	     (format nil "~a" col-type)
+	     (if not-null " NOT NULL" "")
+	     (if (eq unique t) " UNIQUE" "")
+	     (typecase default
+	       (cons
+		(format nil " DEFAULT ~a(~@[~{~a~^, ~}~])" (car default) (cdr default)))
+	       (integer
+		(format nil " DEFAULT ~a" default))
+	       (string
+		(format nil " DEFAULT '~a'" default))
+	       (boolean
+		(if (eq col-type :boolean)
+		    (format nil " DEFAULT '~a'" (if (eq default t) "t" "f"))
+		    ""))
+	       (t ""))))))
 
 
 (define-layered-method clause
@@ -224,10 +222,10 @@ multiple records in a one-to-many relationship.")
   (:method
       :in db-table-layer ((class db-table-class)) 
     (with-slots (schema table require-columns) class
-      (princ (format nil "Creating type: ~a_type~%" table))
-      (let ((table-name (set-sql-name schema table)))
+      (princ (format nil "Creating composite type: ~a_type~%" (as-prefix table)))
+      (let ((table-name (set-sql-name schema (as-prefix table))))
 	(format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a_type') THEN CREATE TYPE ~a_type AS (~{~{~a ~a~}~^, ~}); END IF;"
-		(db-syntax-prep table) table-name (mapcar #'(lambda (column)
+		(as-prefix table) table-name (mapcar #'(lambda (column)
 							      (list (column-name column)
 								    (col-type column)))
 							  require-columns))))))
@@ -257,7 +255,7 @@ so that differing columns of the same type can be applied to a procedure call.")
 	      (let ((columns (filter-slots-by-type class 'db-column-slot-definition)))
 		(loop
 		  for column in columns
-		  do (princ (format nil "Creating type: ~s~%" (slot-value column 'domain)))
+		  do (princ (format nil "Creating domain: ~s~%" (slot-value column 'domain)))
 		  collect (with-slots (domain col-type) column
 			    (format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE DOMAIN ~a.~a AS ~a; END IF;"
 				    domain schema domain (if (eq col-type :serial)

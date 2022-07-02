@@ -113,11 +113,12 @@ and not null. Returns a boolean.")
 
 (defun declared-var (table column &optional prefix)
   (with-slots (col-type column-name) column
-    (let ((col-type% (if (eq col-type :serial) :integer col-type))
-	  (column-param (format nil "~@[~a~]_~a" prefix column-name)))
+    (let* ((col-type% (if (eq col-type :serial) :integer col-type))
+	   (column-name (as-prefix column-name))
+	   (column-param (format nil "~@[~a~]_~a" prefix column-name)))
       (make-var
        :column column-param
-       :var (list (format nil "_~a_~a" (db-syntax-prep table) column-name) col-type% nil)
+       :var (list (format nil "_~a_~a" table column-name) col-type% nil)
        :param (list :out column-param col-type%)))))
 
 
@@ -149,7 +150,7 @@ and not null. Returns a boolean.")
 	   (declared-var (with-slots (col-type default) slot
 			   (when (or (eq col-type :serial)
 				     default)
-			     (declared-var table slot)))))
+			     (declared-var (as-prefix table) slot)))))
       (values
        (class-name class)
        (make-component 
@@ -178,7 +179,7 @@ and not null. Returns a boolean.")
 	for declared-var = (with-slots (col-type default) column
 			     (when (or (eq col-type :serial)
 				       default)
-			       (declared-var table column)))
+			       (declared-var (as-prefix table) column)))
 	when declared-var
 	  collect declared-var into declared-vars%
 	  and collect column into returning-columns%
@@ -228,7 +229,7 @@ and not null. Returns a boolean.")
 			     declared-vars))
 	:declarations declared-vars
 	:params (when vars
-	  `((:in ,(format nil "~a_type[]" (set-sql-name schema table)))))
+	  `((:in ,(format nil "~a_type[]" (set-sql-name schema (as-prefix table))))))
 	:param-controls (cond (vars
 			       (nconc
 				(when returning-columns
@@ -279,7 +280,7 @@ and not null. Returns a boolean.")
 	for column-name = (slot-value slot 'column-name)
 	for domain = (slot-value slot 'domain)
 	for declared-var = (when (member slot require-columns :test #'equality)
-			     (declared-var table slot))
+			     (declared-var (as-prefix table) slot))
 	if declared-var
 	  collect column-name into required-columns
 	  and collect declared-var into declared-vars

@@ -12,6 +12,7 @@
 		 (:file "conditions")
 		 (:file "util")
 		 (:file "layers")
+		 (:file "keywords")
 		 (:file "metaclass")
 		 (:file "connect")
 		 (:file "setting-up")

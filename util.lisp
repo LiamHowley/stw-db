@@ -1,6 +1,10 @@
 (in-package stw.db)
 
 
+(defun as-prefix (word)
+  (string-trim '(#\") word))
+
+
 (defgeneric db-syntax-prep (this)
   (:method ((this string))
     (string-downcase

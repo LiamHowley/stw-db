@@ -115,7 +115,7 @@ have no value.")
 	for column-name = (slot-value column 'column-name)
 	for domain = (slot-value column 'domain)
 	for declared-var = (when (member column require-columns :test #'equality)
-			     (declared-var table column "delete"))
+			     (declared-var (as-prefix table) column "delete"))
 	when declared-var
 	  collect declared-var into declared-vars
 	  and collect (set-sql-name table (column-name column)) into returning-columns

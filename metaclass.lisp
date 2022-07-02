@@ -307,7 +307,7 @@ They either don't belong in this node or a foreign key is required" self)))
 		(slot-makunbound class slot))
 	    '(primary-keys require-columns))
     (unless table
-      (setf table (db-syntax-prep (class-name class))))
+      (setf table (funcall *reserved-keywords-filter* (db-syntax-prep (class-name class)))))
     (map-filtered-slots
      class
      #'(lambda (slot) (typep slot 'db-column-slot-definition))
@@ -316,10 +316,13 @@ They either don't belong in this node or a foreign key is required" self)))
 	       (to-check))
 
 	   (with-slots (domain table-class column-name foreign-key col-type referenced check) slot
-	     (setf column-name (db-syntax-prep slot-name)
+	     (setf column-name (funcall *reserved-keywords-filter* (db-syntax-prep slot-name))
 		   (slot-value slot 'table) table
 		   table-class class
-		   domain (format nil "~a_~a" table column-name)
+		   domain (funcall *reserved-function/type-filter*
+				   (format nil "~a_~a"
+					   (db-syntax-prep (class-name class))
+					   (db-syntax-prep slot-name)))
 		   (slot-value slot 'schema) schema)
 	     (when foreign-key
 	       (with-slots (ref-table table) foreign-key

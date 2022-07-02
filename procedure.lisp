@@ -57,10 +57,10 @@ according to class.")
   (:method
       :in db-layer ((class db-table-class))
     (with-slots (schema table require-columns mapped-by) class
-      (let ((table-name (set-sql-name schema table))
+      (let ((table-name (set-sql-name schema (as-prefix table)))
 	    (control (if mapped-by
-			 "ARRAY[~~{(~{~a~^, ~})~~^, ~~}]::~a_type[]"
-			 "ARRAY[(~{~a~^, ~})]::~a_type[]")))
+			 "ARRAY[ ~~{ROW (~{~a~^, ~})~~^, ~~}]::~a_type[]"
+			 "ARRAY[ ROW (~{~a~^, ~})]::~a_type[]")))
 	(list 
 	 (format nil control
 		 (loop
@@ -86,6 +86,8 @@ of class with updated values.")
       :around ((class serialize) component &rest rest &key)
     (declare (ignore rest))
     (let ((procedure (call-next-method)))
+      (with-slots (name) procedure
+	(setf name (funcall *reserved-function/type-filter* name)))
       (set-control procedure)
       (statement procedure)
       procedure))
@@ -119,7 +121,6 @@ of class with updated values.")
 		    p-controls param-controls
 		    relevant-slots (get-relevant-slots class procedure)))))
 	procedure))))
-
 
 
 

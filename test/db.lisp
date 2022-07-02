@@ -152,6 +152,23 @@
   ((sites :maps-table user-site :maps-column site :type list)))
 
 
+(define-db-table current-user ()
+  ((id :col-type :integer
+       :primary-key t
+       :root-key t
+       :foreign-key (:table user-base
+		     :column id
+		     :on-delete :cascade
+		     :on-update :cascade))
+   (current_timestamp :col-type :timestamptz
+		      :lock-value t
+		      :default (now))))
+
+
+(define-interface-node active-user (current-user)
+  ())
+  
+
 
 ;;;;; tests
 
@@ -196,6 +213,7 @@
 
 (defvar *user*) 
 (defvar *account*)
+(defvar *active-user*)
 
 (define-test table-order...
   :parent stw-db
@@ -221,6 +239,19 @@
       (false (stw.db::slot-to-go *account* (stw.meta:find-slot-definition (find-class 'user-email) 'email)))
       (true (stw.db::slot-to-go *account* (stw.meta:find-slot-definition (find-class 'user-handle) 'handle))))))
 
+
+(define-test keyword...
+  :parent stw-db
+  (let ((*active-user* (make-instance 'active-user :id 1)))
+    (is string= (slot-value (find-class 'current-user) 'stw.db::table) "\"current_user\"")
+    (is string= (slot-value (find-slot-definition (find-class 'current-user) 'current_timestamp 'db-column-slot-definition)
+			    'stw.db::column-name)
+	"\"current_timestamp\"")
+    (is string=
+	"CREATE TABLE IF NOT EXISTS stw_test_schema.\"current_user\" (id INTEGER NOT NULL, \"current_timestamp\" TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (id));"
+	(with-active-layers (db-table-layer)
+	  (create-table-statement (find-class 'current-user))))))
+  
 
 (define-test mapping...
   :parent stw-db
