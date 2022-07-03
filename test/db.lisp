@@ -226,8 +226,8 @@
 	  `(user-base user-url user-name user-account user-id user-email)
 	  (with-active-layers (insert-node)
 	    (stw.db::include-tables *account*)))
-      (true (stw.db::slot-to-go *account* (stw.meta:find-slot-definition (find-class 'user-email) 'email)))
-      (false (stw.db::slot-to-go *account* (stw.meta:find-slot-definition (find-class 'user-handle) 'handle)))
+      (true (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-email) 'email)))
+      (false (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-handle) 'handle)))
 
       (setf (slot-value *account* 'handle) "foo"
 	    (slot-value *account* 'email) nil)
@@ -236,15 +236,15 @@
 	  `(user-base user-url user-handle user-name user-account user-id)
 	  (with-active-layers (insert-node)
 	    (stw.db::include-tables *account*)))
-      (false (stw.db::slot-to-go *account* (stw.meta:find-slot-definition (find-class 'user-email) 'email)))
-      (true (stw.db::slot-to-go *account* (stw.meta:find-slot-definition (find-class 'user-handle) 'handle))))))
+      (false (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-email) 'email)))
+      (true (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-handle) 'handle))))))
 
 
 (define-test keyword...
   :parent stw-db
   (let ((*active-user* (make-instance 'active-user :id 1)))
     (is string= (slot-value (find-class 'current-user) 'stw.db::table) "\"current_user\"")
-    (is string= (slot-value (find-slot-definition (find-class 'current-user) 'current_timestamp 'db-column-slot-definition)
+    (is string= (slot-value (find-slot-definition (find-class 'current-user) 'current-timestamp 'db-column-slot-definition)
 			    'stw.db::column-name)
 	"\"current_timestamp\"")
     (is string=
