@@ -100,7 +100,7 @@ the connection pool associated with env."
 
 (defmacro set-connection-limit (env limit)
   "Set a connection limit for the connection pool 
-associated with the defined environment env.
+associated with the defined environment ENV.
 
 Connection limits are set with a positive numeric 
 value: a negative value indicates no limit and 0 

@@ -2,8 +2,15 @@
 
 (defparameter *file* nil)
 
+(defmacro live-tests ()
+  `(progn
+     (test 'live-test)
+     (db-connect db (db-layer) (drop-schema *schema* t))))
+
+(define-test live-test)
+  
 (define-test params-file...
-  :parent stw-db
+  :parent live-test
   (princ "Please specify a file with connection params.")
   (terpri)
   (setf *file* (read))
@@ -14,7 +21,7 @@
     (of-type list (connection-params *file*))))
 
 (define-test connecting...
-  :parent stw-db
+  :parent live-test
   :depends-on (params-file...)
   (define-db-environment db
       (connection-params *file*))

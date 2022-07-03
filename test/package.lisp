@@ -16,17 +16,18 @@
   (:shadow
    :define-db-table
    :define-key-table)
-  (:export :run-tests))
+  (:export :live-tests
+	   :run-tests))
 
 (in-package stw.db.test)
 
 (define-test stw-db)
 
-(defmacro run-tests ()
-  `(prog1
-       (test 'stw-db)
-     (db-connect db (db-layer)
-       (drop-schema *schema* t))))
-
+(defmacro run-tests (&optional include-live-tests)
+  `(if ,include-live-tests
+       (progn 
+	(test 'stw-db)
+	(live-tests))
+       (test 'stw-db)))
 
 (defparameter *schema* "stw_test_schema")

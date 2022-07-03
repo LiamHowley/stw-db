@@ -11,7 +11,7 @@
 		 :sites '("foo.com" "bar.com" "baz.com")))
 
 (define-test setting-up...
-  :parent stw-db
+  :parent live-test
   :depends-on (connecting...)
   (db-connect db (insert-node)
     (sync *new-account* nil))
@@ -20,7 +20,7 @@
 
 
 (define-test updating...
-  :parent stw-db
+  :parent live-test
   :depends-on (setting-up...)
   (db-connect db (update-node)
     (let ((copy (clone-object *new-account*)))
@@ -42,7 +42,7 @@
 
 
 (define-test retrieving-data
-  :parent stw-db
+  :parent live-test
   :depends-on (updating...)
   (let ((account (make-instance 'account :name "baz"))
 	(new-account (make-instance 'account :name "baz" :email "baz")))
@@ -53,3 +53,5 @@
       (is string= (slot-value new-account 'email) "baz@foobar.com")
       (is string= (slot-value *new-account* 'email) (slot-value account 'email))
       (is string= (slot-value *new-account* 'email) (slot-value new-account 'email)))))
+
+
