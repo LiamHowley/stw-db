@@ -8,7 +8,7 @@
   (setf class nil))
 
 
-(define-layered-method parenthesize
+(define-layered-method escape
   :in delete-node ((slots cons))
   nil)
 

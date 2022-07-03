@@ -279,14 +279,14 @@
     (with-active-layers (db-interface-layer)
 
       (let ((format-components (stw.db::sql-typed-array (find-class 'user-account))))
-	(is string= "ARRAY[(~a, ~a, ~a)]::stw_test_schema.user_account_type[]" (car format-components))
+	(is string= "ARRAY[ ROW (~a, ~a, ~a)]::stw_test_schema.user_account_type[]" (car format-components))
 	(is eql 3 (length (cadr format-components)))
 	(loop
 	  for slot in (cadr format-components)
 	  do (of-type 'db-column-slot-definition slot))
 
 	(let ((foo-slot-definition (find-slot-definition (class-of *account*) 'handle 'db-column-slot-definition)))
-	  (is string= "'(\"foo\")'" (stw.db::prepare-value% foo-slot-definition (slot-value *account* 'handle) t))
+	  (is string= "'\"foo\"'" (stw.db::prepare-value% foo-slot-definition (slot-value *account* 'handle) t))
 	  (is string= "E'foo'" (stw.db::prepare-value% foo-slot-definition (slot-value *account* 'handle)))))
 
       (with-active-layers (insert-node)
@@ -296,15 +296,15 @@
 	      '((:OUT "_id" :INTEGER) (:OUT "_user_id" :INTEGER)
 		(:IN "stw_test_schema.user_email_type[]"))
 	      (slot-value procedure 'stw.db::args))
-	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[(~a)]::stw_test_schema.user_email_type[])"
+	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[ ROW (~a)]::stw_test_schema.user_email_type[])"
 	      (slot-value procedure 'stw.db::p-control))
-	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[('(\"liam@foobar.com\")')]::stw_test_schema.user_email_type[])"
+	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[ ROW ('\"liam@foobar.com\"')]::stw_test_schema.user_email_type[])"
 	      (dispatch-statement *user* procedure))))
 
       (setf (slot-value *account* 'email) "foo@bar.com")
 
       (let ((format-components (stw.db::sql-typed-array (find-class 'user-email))))
-	(is string= "ARRAY[(~a)]::stw_test_schema.user_email_type[]" (car format-components))
+	(is string= "ARRAY[ ROW (~a)]::stw_test_schema.user_email_type[]" (car format-components))
 	(is eql 1 (length (cadr format-components)))
 	(of-type 'db-column-slot-definition (caadr format-components)))
 
@@ -331,33 +331,33 @@
 		(update-op-dispatch-statement *account* clone procedure)))))
       
       (let ((format-components (stw.db::sql-typed-array (find-class 'user-site))))
-	(is string= "ARRAY[~{(~a)~^, ~}]::stw_test_schema.user_site_type[]" (car format-components))
+	(is string= "ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_site_type[]" (car format-components))
 
 	(with-active-layers (insert-table)
 	  (setf (slot-value *account* 'sites) '("foo.com" "bar.com" "baz.com"))
 	  (let ((procedure (generate-procedure *account* (find-class 'user-site))))
 	    (of-type stw.db::procedure procedure)
 	    (is string=
-		"CALL stw_test_schema.user_site_insert (~a, ARRAY[~{(~a)~^, ~}]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_insert (~a, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_site_type[])"
 		(slot-value procedure 'stw.db::p-control))
 	    (is equal
 		'(("stw_test_schema.user_site_id") (:inout "insert_sites" "stw_test_schema.user_site_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw_test_schema.user_site_insert (1, ARRAY[('(\"foo.com\")'), ('(\"bar.com\")'), ('(\"baz.com\")')]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_insert (1, ARRAY[ ROW ('\"foo.com\"'), ROW ('\"bar.com\"'), ROW ('\"baz.com\"')]::stw_test_schema.user_site_type[])"
 		(dispatch-statement *account* procedure))))
 	
 	(with-active-layers (delete-table)
 	  (let ((procedure (generate-procedure *account* (find-class 'user-site))))
 	    (of-type stw.db::procedure procedure)
 	    (is string=
-		"CALL stw_test_schema.user_site_delete (~a, ARRAY[~{(~a)~^, ~}]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_delete (~a, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_site_type[])"
 		(slot-value procedure 'stw.db::p-control))
 	    (is equal
 		'(("stw_test_schema.user_site_id") (:INOUT "delete_sites" "stw_test_schema.user_site_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw_test_schema.user_site_delete (1, ARRAY[('(\"foo.com\")'), ('(\"bar.com\")'), ('(\"baz.com\")')]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_delete (1, ARRAY[ ROW ('\"foo.com\"'), ROW ('\"bar.com\"'), ROW ('\"baz.com\"')]::stw_test_schema.user_site_type[])"
 		(dispatch-statement *account* procedure))))))))
 
 

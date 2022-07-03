@@ -70,7 +70,7 @@ and the control string p-control. Values are obtained from serialize.")
     (with-slots (p-control relevant-slots) procedure
       (apply #'format nil p-control
 	     (nreverse
-	      (labels ((walk (inner &optional acc parenthesize)
+	      (labels ((walk (inner &optional acc escape)
 			 (cond ((null inner)
 				acc)
 			       ((atom inner)
@@ -78,15 +78,15 @@ and the control string p-control. Values are obtained from serialize.")
 				       (value (or (and (slot-boundp class slot-name)
 						       (slot-value class slot-name))
 						  "null"))
-				       (result (prepare-value% inner value parenthesize)))
+				       (result (prepare-value% inner value escape)))
 				  (cond (result
 					 (cons result acc))
 					(t acc))))
-			       (t (walk (cdr inner) (walk (car inner) acc (parenthesize inner)))))))
+			       (t (walk (cdr inner) (walk (car inner) acc (escape inner)))))))
 		(walk relevant-slots)))))))
 
 
-(define-layered-function parenthesize (slots)
+(define-layered-function escape (slots)
   (:method
       :in db-layer ((slots cons))
     (unless (> (length slots) 1)
@@ -251,11 +251,11 @@ relevant instance of SLOT-MAPPING.")
 	do (return mapping))))
 
 
-(define-layered-function prepare-value% (slot value &optional parenthesize)
+(define-layered-function prepare-value% (slot value &optional escape)
   (:documentation "Parse slot for col-type, and call prepare-value.")
 
   (:method
-      :in db-layer ((slot db-column-slot-definition) value &optional parenthesize)
+      :in db-layer ((slot db-column-slot-definition) value &optional escape)
     (with-slots (col-type default not-null) slot
       (let ((col-type (if (consp col-type)
 			  (car col-type)
@@ -265,33 +265,34 @@ relevant instance of SLOT-MAPPING.")
 		((:text :varchar :char)
 		 :text)
 		(t col-type)))
-      (prepare-value slot col-type value parenthesize))))
+      (prepare-value slot col-type value escape))))
 
   (:method
-      :in db-layer ((slot db-aggregate-slot-definition) values &optional parenthesize)
+      :in db-layer ((slot db-aggregate-slot-definition) values &optional escape)
     (with-slots (maps) slot
       (loop
 	with column = (mapped-column maps)
 	for value in values
-	collect (prepare-value% column value parenthesize)))))
+	collect (prepare-value% column value escape)))))
 
 
 
-(define-layered-function prepare-value (slot col-type value parenthesize)
-  (:documentation "Prepare value for query. Specializes on keyword representation of col-type. 
-E.g. :text :varchar :integer etc. The use of parenthesize, indicates whether the rather strange
-construct of having the values in a composite typed array enwrapped in parenthesis.")
+(define-layered-function prepare-value (slot col-type value escape)
+  (:documentation "Prepare value for query. Specializes on keyword representation of col-type,
+specifically text/character types. While all strings are by default escaped, the use of escape
+indicates whether the string is wrapped in double quotes or whether the character E can be used
+before the first single quote.")
 
   (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :text)) (value string) parenthesize)
-      (if parenthesize
-	  (concatenate 'string "'(\"" value "\")'")
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :text)) (value string) escape)
+      (if escape
+	  (concatenate 'string "'\"" value "\"'")
 	  (concatenate 'string "E'" value "'")))
 
   ;;; the rest
   (:method
-      :in db-layer ((slot db-column-slot-definition) col-type value parenthesize)
-    (declare (ignore col-type parenthesize))
+      :in db-layer ((slot db-column-slot-definition) col-type value escape)
+    (declare (ignore col-type escape))
     (cond (value (to-sql-string value))
 	  ((slot-value slot 'default)
 	   "null"))))
