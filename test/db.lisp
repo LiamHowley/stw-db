@@ -160,7 +160,7 @@
 		     :column id
 		     :on-delete :cascade
 		     :on-update :cascade))
-   (current_timestamp :col-type :timestamptz
+   (current-timestamp :col-type :timestamptz
 		      :lock-value t
 		      :default (now))))
 

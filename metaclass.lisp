@@ -206,13 +206,15 @@ with a single column of type serial."))
 	    (infill-column check slot-name)))
     (when foreign-key
       (let ((schema (getf foreign-key :schema)))
-	(setf (slot-value slot 'foreign-key)
-	      (apply #'make-instance 'foreign-key
-		     :schema schema
-		     :ref-schema (or (getf foreign-key :ref-schema)
-				     schema)
-		     :key slot-name
-		     foreign-key))))))
+	(let ((f-key (apply #'make-instance 'foreign-key
+			    :schema schema
+			    :ref-schema (or (getf foreign-key :ref-schema)
+					    schema)
+			    :key slot-name
+			    foreign-key)))
+	  (with-slots (no-join) f-key
+	    (setf (slot-value slot 'foreign-key) f-key
+		  no-join (or no-join root-key))))))))
 
 
 
@@ -257,18 +259,30 @@ with a single column of type serial."))
     (let (backtrace-table)
       (flet ((collate-keys (table-class)
 	       (loop
-		 for key in (slot-value table-class 'foreign-keys)
-		 do (with-slots (table column) key
+		 for fkey in (slot-value table-class 'foreign-keys)
+		 do (with-slots (table column no-join) fkey
 		      (let ((ref-slot (find-slot-definition table column 'db-column-slot-definition)))
 
-			;; Find root-key amongst foreign-keys and
+			;; If root-key not present in class
+			;; find root-key amongst foreign-keys and
 			;; set root-key for class
-			(when (slot-value ref-slot 'root-key)
-			  (setf root-key (make-instance 'root-key :table (find-class table)
-								  :column ref-slot))))
-		      (aif (assoc table backtrace-table :test #'eq)
-			   (pushnew (class-name table-class) (cdr self))
-			   (setf backtrace-table (acons table (list (class-name table-class)) backtrace-table)))))))
+			(unless root-key
+			  (when (slot-value ref-slot 'root-key)
+			    (setf root-key (make-instance 'root-key :table (find-class table)
+								    :column ref-slot))))
+			(unless no-join
+			  (aif (assoc table backtrace-table :test #'eq)
+			       (pushnew (class-name table-class) (cdr self))
+			       (setf backtrace-table (acons table (list (class-name table-class)) backtrace-table)))))))))
+
+	;; find if any columns are root-keys
+	(loop
+	  for column in (filter-slots-by-type class 'db-column-slot-definition)
+	  for root-key% = (slot-value column 'root-key)
+	  when root-key%
+	    do (setf root-key (make-instance 'root-key :table (slot-value column 'table-class)
+						       :column column)))
+
 	(loop
 	  for object in (filter-precedents-by-type class 'stw-base-class)
 
@@ -292,7 +306,8 @@ with a single column of type serial."))
 		 (pushnew maps (slot-value class 'maps) :test #'eq)
 		 (pushnew maps (slot-value mapped-column 'mapped-by) :test #'eq)
 		 (pushnew maps (slot-value mapped-table 'mapped-by) :test #'eq))))
-	(setf tables (sort-tables backtrace-table)))))
+	(setf tables (or (sort-tables backtrace-table) tables)))))
+
   ;; and ensure each column is tied to the root-key
   (awhen (ensure-bound-columns class)
     (error "the table(s) ~{~a^ ~} are not bound to a root-key. 
