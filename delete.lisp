@@ -27,46 +27,47 @@
 
 (define-layered-method generate-procedure
   :in-layer delete-node ((class serialize) component &rest rest &key)
-  "Deletes value at root key, and assumes a cascade. If foreign keys are
+  "Deletes value in root table, and assumes a cascade. If foreign keys are
 not set to cascade on deletion, then data will be orphaned."
   (declare (ignore component rest))
   (let* ((base-class (class-of class))
-	 (root-key (slot-value base-class 'root-key))
-	 (root-table (slot-value root-key 'table))
-	 (root-column (slot-value root-key 'column))
-	 (root-column-name (slot-definition-name root-column))
+	 (root-table (find-class (car (slot-value base-class 'tables))))
+	 (root-columns (slot-value root-table 'primary-keys))
 	 (schema (slot-value base-class 'schema))
-	 (col-type (let ((col-type (col-type root-column)))
-		     (if (eq col-type :serial)
-			 :integer
-			 col-type)))
 	 (procedure (make-instance 'procedure
 				   :schema schema
 				   :name (format nil "~a_delete" (db-syntax-prep (class-name base-class))))))
-    (if (and (slot-boundp class root-column-name)
-	     (slot-value class root-column-name))
-	(with-slots (schema sql-list args p-controls relevant-slots) procedure
-	  (setf sql-list (list (with-active-layers (delete-table)
-				 (delete-node-component root-table root-column)))
-		args `((:in "root_key" ,col-type))
-		p-controls `(("~a" ,root-column))
-		relevant-slots (get-relevant-slots class procedure)))
-	(let* ((ignore-tables (ignore-tables class))
-	       (select-proc
-		 (with-active-layers (retrieve-node)
-		   (generate-procedure class nil
-				       :select-columns `((,(class-name root-table) ,root-column-name))
-				       :ignore-tables ignore-tables))))
-	  (with-slots (relevant-slots sql-list p-controls args) procedure
-	    (let ((table-name (table root-table))
-		  (column-name (column-name root-column)))
-	    (setf sql-list `(,(format nil "DELETE FROM ~a.~a WHERE ~a.~a IN (~a);"
-				      schema table-name table-name column-name
-				      (string-right-trim '(#\;) (sql-query select-proc))))
+    (with-slots (schema sql-list args p-controls relevant-slots) procedure
+      (if (every (lambda (slot)
+		   (let ((slot-name (slot-definition-name slot)))
+		     (and (slot-boundp class slot-name)
+			  (slot-value class slot-name))))
+		 root-columns)
+	  (loop
+	    for column in root-columns
+	    collect (list (set-sql-name schema (slot-value column 'domain))) into args%
+	    collect `("~a" ,column) into p-controls%
+	    finally (setf sql-list (list (with-active-layers (delete-table)
+					   (delete-node-component root-table root-columns)))
+			  args args%
+			  p-controls p-controls%
+			  relevant-slots (get-relevant-slots class procedure)))
+	  (let* ((ignore-tables (ignore-tables class))
+		 (select-proc
+		   (with-active-layers (retrieve-node)
+		     (generate-procedure class nil
+					 :select-columns root-columns
+					 :ignore-tables ignore-tables)))
+		 (table-name (table root-table))
+		 (column-names (mapcar #'column-name root-columns)))
+	    (setf sql-list (list (format nil "DELETE FROM ~a.~a WHERE (~{~a~^, ~}) IN (~a);"
+					 schema table-name
+					 column-names
+					 (string-right-trim '(#\;) (sql-query select-proc))))
 		  args (args select-proc)
 		  p-controls (p-controls select-proc)
-		  relevant-slots (get-relevant-slots class procedure))))))
-    procedure))
+		  relevant-slots (get-relevant-slots class procedure)))))
+      procedure))
 
 
 (define-layered-function ignore-tables (class)

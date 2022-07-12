@@ -81,7 +81,7 @@
 (define-layered-method sync
   :in retrieve-node
   ((class serialize) component &rest rest 
-   &key optional-join union-queries union-all-queries having group-by (order-by `(,(column-name (column (root-key (class-of class)))))) limit)
+   &key optional-join union-queries union-all-queries having group-by (order-by (mapcar #'column-name (get-root-key (class-of class)))) limit)
   (apply #'call-next-layered-method class component rest))
 
 

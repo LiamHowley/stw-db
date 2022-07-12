@@ -17,11 +17,6 @@
     :initarg :tables
     :initform nil
     :accessor tables)
-   (root-key
-    :initform nil
-    :initarg :root-key
-    :documentation "As a primary key is to a table, a root key is to a node. All referenced tables must have a foreign key referencing the root key column. Amongst other purposes, it represents a slot of equal value between two instances of the same class and serves as an anchor during updating operations. Once bound, it's value should not be updated. E.g. an ID column."
-    :reader root-key)
    (maps
     :initform nil
     :type list
@@ -30,7 +25,7 @@
 
 
 (defmethod partial-class-base-initargs append ((class db-wrap))
-  '(:tables :root-key))
+  '(:tables))
 
 (defclass db-base-column-definition
     (stw-direct-slot-definition)
@@ -45,20 +40,20 @@
    (express-as-type
     :initarg :express-as-type
     :initform nil
-    :type (null symbol)
+    :type (or null symbol)
     :documentation "Set requested type for SELECT operations to return. Unless otherwise specified, the type
 set in maps-table will be returned.")
    (constraint
     :initarg :constraint
     :initform nil
-    :type (null cons)
+    :type (or null cons)
     :documentation "similar to SET-MAPPED-DEFAULTS constraint references other columns in a
 mapped table. However, CONSTRAINT requires a form, other than a list, e.g. (string= \"value\") or 
 (> 3). Multiple constraints can be set in the form so that a constraint could reference a number greater than
 and less than. The list will be walked, using INFIX-LIST, setting the appropriate operand and column name")
    (set-mapped-defaults
     :initarg :set-mapped-defaults
-    :initform nil :type (null cons)
+    :initform nil :type (or null cons)
     :documentation "when mapping a column, other columns from the same table may have a fixed value. 
 Set as alist ((COLUMN . VALUE))")))
 
@@ -72,16 +67,15 @@ Set as alist ((COLUMN . VALUE))")))
   :in db-table-layer (singleton-class db-class)
   ((schema :initarg :schema :initform "public" :reader schema :type string)
    (table :initarg :table :initform nil :reader table :type string)
-   (primary-keys :initarg :primary-keys :initform nil :accessor primary-keys :type (null cons))
-   (foreign-keys :initarg :foreign-keys :initform nil :accessor foreign-keys :type (null cons))
-   (referenced-by :initarg :referenced-by :initform nil :accessor referenced-by :type (cons null))
-   (constraints :initarg :constraints :initform nil :reader constraints :type (null cons))
-   (mapped-by :initform nil :reader mapped-by :type (null cons))
-   (require-columns :type (null string) :reader require-columns)))
+   (primary-keys :initarg :primary-keys :accessor primary-keys :type (or null cons))
+   (foreign-keys :initarg :foreign-keys :initform nil :accessor foreign-keys :type (or null cons))
+   (constraints :initarg :constraints :initform nil :reader constraints :type (or null cons))
+   (mapped-by :initform nil :reader mapped-by :type (or null cons))
+   (require-columns :type (or null string) :reader require-columns)))
 
 
 (defmethod partial-class-base-initargs append ((class db))
-  '(:schema :table :primary-keys :foreign-keys :referenced-by :constraints))
+  '(:schema :table :primary-keys :foreign-keys :constraints))
 
 
 (defclass db-column-slot-definition (db-base-column-definition)
@@ -91,14 +85,12 @@ Set as alist ((COLUMN . VALUE))")))
    (col-type :initarg :col-type :initform :text :reader col-type :type keyword)
    (domain :reader domain :type string)
    (primary-key :initarg :primary-key :initform nil :type boolean)
-   (root-key :initarg :root-key :initform nil :type boolean)
-   (foreign-key :initarg :foreign-key :initform nil :reader foreign-key :type (cons null))
-   (unique :initarg :unique :initform nil :type (boolean null))
-   (check :initarg :check :initform nil :type (null cons))
-   (default :initarg :default :initform nil)
+   (foreign-key :initarg :foreign-key :initform nil :reader foreign-key :type (or cons null))
+   (unique :initarg :unique :initform nil :type (or boolean null))
+   (check :initarg :check :initform nil :type (or null cons))
+   (default :initarg :default :reader default)
    (index :initarg :index :initform nil :reader index :type boolean)
    (not-null :initarg :not-null :initform nil :type boolean :reader not-null-p)
-   (referenced :initarg :referenced :initform nil :type boolean)
    (value :initarg :value :initform nil)
    (mapped-by :initform nil :reader mapped-by)
    (column-name :reader column-name)
@@ -153,16 +145,11 @@ with a single column of type serial."))
 	(setf (slot-value slot 'express-as-type) maps-table)))))
 
 
-
-(define-layered-class root-key
-  :in-layer db-interface-layer ()
-  ((table :initarg :table :reader table)
-   (column :initarg :column :reader column)))
-
-
 (define-layered-class foreign-key
-  :in-layer db-table-layer (root-key)
-  ((key :initarg :key :initform nil :reader key)
+  :in-layer db-table-layer ()
+  ((table :initarg :table :reader table)
+   (column :initarg :column :reader column)
+   (key :initarg :key :initform nil :reader key)
    (ref-schema :initarg :ref-schema :initform nil :reader ref-schema)
    (ref-table :initarg :ref-table :initform nil :reader ref-table)
    (schema :initarg :schema :initform nil :reader schema)
@@ -189,18 +176,15 @@ with a single column of type serial."))
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((slot db-column-slot-definition)
-		      &key col-type check primary-key foreign-key root-key &allow-other-keys)
+		      &key default col-type check primary-key foreign-key &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
     (when (eq col-type 'serial)
       (setf (slot-value slot 'lock-value) t))
-    (flet ((process-primary-key ()
+    (flet ((set-not-null ()
 	     (unless (eq col-type 'serial)
 	       (setf (slot-value slot 'not-null) t))))
-      (when root-key
-	(setf (slot-value slot 'primary-key) t)
-	(process-primary-key))
       (when primary-key
-	(process-primary-key)))
+	(set-not-null)))
     (when check
       (setf (slot-value slot 'check)
 	    (infill-column check slot-name)))
@@ -212,9 +196,7 @@ with a single column of type serial."))
 					    schema)
 			    :key slot-name
 			    foreign-key)))
-	  (with-slots (no-join) f-key
-	    (setf (slot-value slot 'foreign-key) f-key
-		  no-join (or no-join root-key))))))))
+	  (setf (slot-value slot 'foreign-key) f-key))))))
 
 
 
@@ -233,66 +215,44 @@ with a single column of type serial."))
      t)))
 
 
-(define-layered-function ensure-bound-columns (class)
-  (:documentation "Ensure all tables are bound by means of a key column")
-
-  (:method
-      :in db-interface-layer ((class db-wrap))
-    (with-slots (tables root-key) class
-      (let* ((acc)
-	     (referring-table (slot-value root-key 'table))
-	     (referenced-by (slot-value referring-table 'referenced-by)))
-	(when referenced-by
-	  (loop
-	    for fkey in referenced-by
-	    do (pushnew (slot-value fkey 'ref-table) acc)))
-	(reduce #'set-difference (list tables acc (list (class-name referring-table))))))))
+(defun ensure-bound-tables (tables sorted-tables)
+  "Ensure all tables are bound by means of a foreign-key reference."
+  (loop
+    for table in tables
+    unless (member table sorted-tables :test #'eq)
+      collect table))
 
 
 (define-layered-method initialize-in-context
   :in db-interface-layer ((class db-wrap) &key)
-  (with-slots (root-key foreign-keys tables) class
+  (with-slots (foreign-keys tables) class
 
     ;; Read relevant precedents into tables and each tables foreign-keys
     ;; into the nodes foreign-key slot. Backtrace-table and f-key-table
     ;; are used for sorting foreign keys based on mutual dependencies.
-    (let (backtrace-table)
+    (let* ((backtrace-table)
+	   (precedents (filter-precedents-by-type class 'db-table-class))
+	   (named-precedents (mapcar #'class-name precedents)))
       (flet ((collate-keys (table-class)
 	       (loop
 		 for fkey in (slot-value table-class 'foreign-keys)
-		 do (with-slots (table column no-join) fkey
-		      (let ((ref-slot (find-slot-definition table column 'db-column-slot-definition)))
+		 do (with-slots (ref-table table) fkey
 
-			;; If root-key not present in class
-			;; find root-key amongst foreign-keys and
-			;; set root-key for class
-			(unless root-key
-			  (when (slot-value ref-slot 'root-key)
-			    (setf root-key (make-instance 'root-key :table (find-class table)
-								    :column ref-slot))))
-			(unless no-join
-			  (aif (assoc table backtrace-table :test #'eq)
-			       (pushnew (class-name table-class) (cdr self))
-			       (setf backtrace-table (acons table (list (class-name table-class)) backtrace-table)))))))))
-
-	;; find if any columns are root-keys
+		      ;; A table referenced by a foreign key is not necessarily
+		      ;; a precedent of an interface node. Filter accordingly.
+		      (when (member table named-precedents :test #'eq)
+			(aif (assoc table backtrace-table :test #'eq)
+			     (pushnew ref-table (cdr self))
+			     (setf backtrace-table (acons table (list (class-name table-class)) backtrace-table))))))))
 	(loop
-	  for column in (filter-slots-by-type class 'db-column-slot-definition)
-	  for root-key% = (slot-value column 'root-key)
-	  when root-key%
-	    do (setf root-key (make-instance 'root-key :table (slot-value column 'table-class)
-						       :column column)))
-
-	(loop
-	  for object in (filter-precedents-by-type class 'stw-base-class)
+	  for object in precedents
 
 	  ;; set schema and tables and collate foreign-keys
 	  when (and (string= (slot-value class 'schema) "public")
 		    (slot-value object 'schema))
 	    do (setf (slot-value class 'schema) (slot-value object 'schema))
-	  when (typep object 'db-table-class)
-	    do (pushnew (class-name object) tables :test #'eq)
-	    and do (collate-keys object))
+	  do (pushnew (class-name object) tables :test #'eq)
+	  do (collate-keys object))
 
 	;; add tables mapped by aggregator slots and push
 	;; mappings to class, table and slot definitions.
@@ -306,12 +266,11 @@ with a single column of type serial."))
 		 (pushnew maps (slot-value class 'maps) :test #'eq)
 		 (pushnew maps (slot-value mapped-column 'mapped-by) :test #'eq)
 		 (pushnew maps (slot-value mapped-table 'mapped-by) :test #'eq))))
-	(setf tables (or (sort-tables backtrace-table) tables)))))
-
-  ;; and ensure each column is tied to the root-key
-  (awhen (ensure-bound-columns class)
-    (error "the table(s) ~{~a^ ~} are not bound to a root-key. 
-They either don't belong in this node or a foreign key is required" self)))
+	(let ((sorted-tables (sort-tables backtrace-table)))
+	  (awhen (ensure-bound-tables tables sorted-tables)
+	    (warn "the table(s) ~{~a^ ~} are not bound. They either 
+don't belong in this node or a foreign key is required" self))
+	  (setf tables sorted-tables))))))
 
 
 
@@ -330,7 +289,7 @@ They either don't belong in this node or a foreign key is required" self)))
 	 (let ((slot-name (slot-definition-name slot))
 	       (to-check))
 
-	   (with-slots (domain table-class column-name foreign-key col-type referenced check) slot
+	   (with-slots (domain table-class column-name foreign-key col-type check) slot
 	     (setf column-name (funcall *reserved-keywords-filter* (db-syntax-prep slot-name))
 		   (slot-value slot 'table) table
 		   table-class class
@@ -343,9 +302,7 @@ They either don't belong in this node or a foreign key is required" self)))
 	       (with-slots (ref-table table) foreign-key
 		 (setf ref-table (class-name class))
 		 (unless (member slot-name (mapcar #'key foreign-keys) :test #'eq)
-		   (pushnew foreign-key foreign-keys :test #'eq)
-		   (pushnew foreign-key (slot-value (find-class table) 'referenced-by)
-			    :test #'eq))))
+		   (pushnew foreign-key foreign-keys :test #'eq))))
 
 	     ;; check constraints
 	     (when check
@@ -360,7 +317,8 @@ They either don't belong in this node or a foreign key is required" self)))
   (loop
     for slot in (filter-slots-by-type instance 'db-column-slot-definition)
     when (slot-value slot 'primary-key)
-      collect slot))
+      collect slot into keys
+    finally (return (setf (slot-value instance 'primary-keys) keys))))
 
 
 (defmethod slot-unbound (class (instance db) (slot-name (eql 'require-columns)))
@@ -377,6 +335,11 @@ They either don't belong in this node or a foreign key is required" self)))
     finally (return (setf (slot-value instance 'require-columns) require-columns%))))
 		  
 
+(define-layered-function get-root-key (class)
+  (:method
+      :in db-layer ((class db-wrap))
+    (let ((root-table (find-class (car (tables class)))))
+	(slot-value root-table 'primary-keys))))
   
 
 
@@ -397,8 +360,7 @@ type purely for convenience and to enable
 dispatching on type."
   (let ((column (ensure-list (cadr body))))
     (setf (getf (cdr column) :col-type) :serial
-	  (getf (cdr column) :root-key) t
-	  (getf (cdr column) :referenced) t
+	  (getf (cdr column) :primary-key) t
 	  (cadr body) (list column))
     `(define-db-class ,name db-table-layer db-key-table
        ,@body)))
