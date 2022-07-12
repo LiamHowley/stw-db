@@ -4,8 +4,21 @@
 (define-layered-method sync
   :in delete-node
   :around ((class serialize) component &rest rest &key)
-  (call-next-method)
-  (setf class nil))
+  (declare (ignore rest))
+  (let* ((root-table (car (slot-value (class-of class) 'tables)))
+	(primary-keys (slot-value (find-class root-table) 'primary-keys)))
+    (loop
+      for slot in primary-keys
+      for slot-name = (slot-definition-name slot)
+      for slot-value-p = (when (slot-boundp class slot-name)
+			   (slot-value class slot-name))
+      unless slot-value-p
+      do (restart-case (null-key-error slot-name class)
+	   (not-an-error ()
+	     :report (lambda (s)
+		       (write-string "This is not an error. Please continue" s))
+	     nil)))
+    (call-next-method)))
 
 
 (define-layered-method escape
@@ -76,99 +89,120 @@ have no value.")
 
   (:method
       :in delete-node ((class serialize))
-    (let ((tables (slot-value (class-of class) 'tables)))
-      (loop
-	for table in tables
-	for required = (require-columns (find-class table))
-	unless (or (typep (find-class table) 'db-key-table)
-		   (and required
-			(some #'(lambda (slot)
-				  (let* ((slot (aif (match-mapping-node (class-of class) (find-class table))
-						    (with-slots (mapping-slot mapped-column) self
-						      (when (eq slot mapped-column)
-							mapping-slot))
-						    slot))
-					 (slot-name (slot-definition-name slot)))
-				    (when (slot-boundp class slot-name)
-				      (slot-value class slot-name))))
-			      required)))
-	  collect table))))
+    (let ((tables%)
+	  (tables (slot-value (class-of class) 'tables)))
+      (labels ((recurse-slots (slots)
+		 (when slots
+		   (let* ((slot (car slots))
+			  (slot-name (slot-definition-name slot)))
+		     (when (and (slot-boundp class slot-name)
+				  (or (slot-value class slot-name)
+				      (eq (slot-value slot 'col-type) :boolean)))
+		       (pushnew (class-name
+				 (typecase slot
+				   (db-column-slot-definition
+				    (slot-value slot 'table-class)) 
+				   (db-aggregate-slot-definition
+				    (mapped-table (slot-value slot 'maps)))))
+				tables%
+				:test #'eq)))
+		   (recurse-slots (cdr slots)))))
+	(recurse-slots (filter-slots-by-type (class-of class) 'db-base-column-definition)))
+      (set-difference (cdr tables) tables% :test #'eq))))
 
 
 
-(define-layered-function delete-node-component (table column)
+(define-layered-function delete-node-component (table columns)
 
   (:method
-      :in delete-table ((table db-table-class) (column db-column-slot-definition))
+      :in delete-table ((table db-table-class) (columns cons))
     (with-slots (schema table) table
-      (let ((table-name (set-sql-name schema table)))
-	(format nil "DELETE FROM ~a WHERE ~a = $1;"
-		table-name (column-name column))))))
+      (let ((table-name (set-sql-name schema table))
+	    (columns% (loop
+		       for count from 1
+		       for column in columns
+		       collect (list (column-name column) count))))
+	(format nil "DELETE FROM ~a WHERE ~{~{~a = $~a~}~^ AND~};"
+		table-name columns%)))))
+
 
 
 (define-layered-method generate-component
-  :in delete-table ((class db-table-class) function &key)
-  (declare (ignore function))
-  (with-slots (primary-keys schema table require-columns) class
-    (let ((table-name (set-sql-name schema table)))
+  :in delete-table ((class db-table-class) (slot-to-go-p function) &key)
+  (with-slots (schema table require-columns primary-keys) class
+    (let ((table-name (set-sql-name schema table))
+	  (single-row (loop
+			for slot in primary-keys
+			always (funcall slot-to-go-p slot))))
       (loop 
 	for column in (filter-slots-by-type class 'db-column-slot-definition)
 	for column-name = (slot-value column 'column-name)
 	for domain = (slot-value column 'domain)
-	for declared-var = (when (member column require-columns :test #'equality)
+	for declared-var = (when (and single-row
+				      (member column require-columns :test #'equality))
 			     (declared-var (as-prefix table) column "delete"))
-	when declared-var
+	for slot-value-p = (funcall slot-to-go-p column)
+	when (and slot-value-p declared-var)
 	  collect declared-var into declared-vars
 	  and collect (set-sql-name table (column-name column)) into returning-columns
 	  and collect (car (var-var declared-var)) into vars
 	  and collect (var-param declared-var) into out-args
 	  and collect nil into out-values
-	collect (list (set-sql-name schema domain)) into args
-	collect `("~a" ,column) into p-controls
-	collect (format nil "~a = $~~a" column-name) into where
+	when slot-value-p
+	  collect (list (set-sql-name schema domain)) into args
+	  and collect `("~a" ,column) into p-controls
+	  and collect (format nil "~a = $~~a" column-name) into where
 	finally (return
-		  (make-component
-		   :sql (format nil "DELETE FROM ~a WHERE ~{~a~^ AND~% ~}~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
-				table-name where returning-columns vars)
-		   :declarations declared-vars
-		   :params `(,@args ,@out-args)
-		   :param-controls `(,@p-controls ,@out-values)))))))
+		  (when where
+		    (make-component
+		     :sql (format nil "DELETE FROM ~a WHERE ~{~a~^ AND~% ~}~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
+				  table-name where returning-columns vars)
+		     :declarations declared-vars
+		     :params `(,@args ,@out-args)
+		     :param-controls `(,@p-controls ,@out-values))))))))
 
 
 
 
 (define-layered-method generate-component
-  :in delete-table ((map slot-mapping) function &key)
-  (declare (ignore function))
+  :in delete-table ((map slot-mapping) (slot-to-go-p function)  &key)
   (let ((class (mapped-table map))
 	(mapped-column (slot-definition-name (mapped-column map)))
 	(typed-array-name (format nil "delete_~(~a~)" (slot-definition-name (mapping-slot map)))))
-    (with-slots (primary-keys schema table require-columns) class
+    (with-slots (schema table require-columns primary-keys) class
       (let ((table-name (set-sql-name schema table))
-	    (type-array (format nil "~a.~a_type[]" schema table)))
+	    (type-array (format nil "~a.~a_type[]" schema table))
+	    (single-row (loop
+			  for slot in primary-keys
+			  always (funcall slot-to-go-p slot))))
 	(loop 
 	  for column in (filter-slots-by-type class 'db-column-slot-definition)
 	  for column-name = (slot-value column 'column-name)
 	  for domain = (slot-value column 'domain)
+	  for slot-value-p = (funcall slot-to-go-p column)
 	  with require-column = nil
-	  if (eq (slot-definition-name column) mapped-column)
+	  if (and (eq (slot-definition-name column) mapped-column)
+		  slot-value-p)
 	    do (setf require-column column-name)
 	    and collect column-name into required-columns
 	  else
-	    if (member column require-columns :test #'equality)
+	    if (and (member column require-columns :test #'equality)
+		    slot-value-p)
 	      collect column-name into required-columns
 	  else
-	    collect (list (set-sql-name schema domain)) into args
-	    and collect `("~a" ,column) into p-controls
-	    and collect column-name into where
+	    if slot-value-p
+	      collect (list (set-sql-name schema domain)) into args
+	      and collect `("~a" ,column) into p-controls
+	      and collect column-name into where
 	  finally (return
-		    (make-component
-		     :sql (format nil "DELETE FROM ~a WHERE ~{~a~^ AND~% ~};"
-				  table-name
-				  `(,@(mapcar #'(lambda (column-name)
-						  (format nil "~a = $~~a" column-name))
-					      where)
-				    ,(format nil "~a IN (SELECT ~{~a~^, ~} FROM UNNEST ($~~a))"
-					     require-column required-columns)))
-		     :params `(,@args (:inout ,typed-array-name ,type-array))
-		     :param-controls `(,@p-controls ,(sql-typed-array class)))))))))
+		    (when (or where require-column)
+		      (make-component
+		       :sql (format nil "DELETE FROM ~a WHERE ~{~a~^ AND~% ~};"
+				    table-name
+				    `(,@(mapcar #'(lambda (column-name)
+						    (format nil "~a = $~~a" column-name))
+						where)
+				      ,(format nil "~a IN (SELECT ~{~a~^, ~} FROM UNNEST ($~~a))"
+					       require-column required-columns)))
+		       :params `(,@args (,(if single-row :inout :in) ,typed-array-name ,type-array))
+		       :param-controls `(,@p-controls ,(sql-typed-array class))))))))))

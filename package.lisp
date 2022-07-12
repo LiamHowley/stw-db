@@ -186,8 +186,12 @@
    :infill-column
    :infix-constraint
 
-   ;; errors
-   :invalid-operator-error))
+   ;; conditions and restarts
+   :invalid-operator-error
+   :null-key-error
+   :update-key-value-error
+   :not-an-error
+   :use-expected-value))
 
 (in-package :stw.db)
 
