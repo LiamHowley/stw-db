@@ -101,7 +101,7 @@ of class with updated values.")
 	    (returns)
 	    (mapping-node (match-mapping-node (class-of class) component)))
 	(with-slots (args vars sql-list p-controls relevant-slots) procedure
-	  (let ((component (generate-component (or mapping-node component) nil)))
+	  (let ((component (generate-component (or mapping-node component) (constantly t))))
 	    (with-slots (sql params param-controls declarations) component
 	      (loop
 		for declaration in declarations

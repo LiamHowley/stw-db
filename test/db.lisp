@@ -172,6 +172,11 @@
 
 ;;;;; tests
 
+(define-test tables...
+  :parent stw-db
+  (is equal
+      `(user-base user-site user-url user-handle user-name user-account user-id user-email)
+      (stw.db::tables (find-class 'account))))
 
 
 (define-test check-schema
@@ -223,7 +228,7 @@
 					     :password "asdfasdf" :url "foobar.com"
 					     :created-by 1 :validated t)))
       (is equal
-	  `(user-base user-url user-name user-account user-id user-email)
+	`(user-base user-url user-name user-account user-id user-email)
 	  (with-active-layers (insert-node)
 	    (stw.db::include-tables *account*)))
       (true (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-email) 'email)))
@@ -310,10 +315,10 @@
       (with-active-layers (update-node)
 	(let ((clone (clone-object *account*)))
 	  (setf (slot-value clone 'email) "bar@foo.com")
-	  (fail (generate-procedure *account* clone) 'unbound-slot "The root-key 'ID is unbound")
+	  (fail (get-key *account* clone) 'null-key-error "Null value for key ID in class ACCOUNT.")
 	  (setf (slot-value *account* 'id) 1
 		(slot-value clone 'id) 2)
-	  (fail (generate-procedure *account* clone) 'error "The root-key slots 'ID do not match.")
+	  (fail (get-key *account* clone) 'update-key-value-error "Expected value: 1. Received value: 2.")
 	  (setf (slot-value clone 'id) 1)
 	  (let ((procedure (generate-procedure *account* clone)))
 	    (of-type stw.db::procedure procedure)

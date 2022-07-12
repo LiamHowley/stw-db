@@ -146,15 +146,12 @@
 								    (when select-columns
 								      (mapcar
 								       #'(lambda (column)
-									   (position (cadr column) slot-names :test #'eq))
+									   (position (slot-definition-name column)
+										     slot-names :test #'eq))
 								       select-columns)))))
-
 					    :vars (if select-columns
 						      (mapcar #'(lambda (column)
-								  (return-var
-								   (find-slot-definition (find-class (car column))
-											 (cadr column)
-											 'db-column-slot-definition)))
+								  (return-var column))
 							      select-columns)
 						      returns)
 					    :relevant-slots slots-with-values)))
@@ -180,11 +177,9 @@
 			     (if select-columns
 				 (setf col-names (mapcar
 						  #'(lambda (column)
-						      (let* ((table-class (find-class (car column)))
+						      (let* ((table-class column)
 							     (table (table table-class))
-							     (slot (find-slot-definition table-class (cadr column)
-											 'db-column-slot-definition))
-							     (column-name (column-name slot)))
+							     (column-name (column-name column)))
 							(set-sql-name table column-name)))
 						  select-columns))
 				 (nconc% col-names columns))))))
