@@ -22,8 +22,7 @@
 		     :column id
 		     :on-delete :cascade
 		     :on-update :cascade))
-   (password :col-type :text
-	     :not-null t)
+   (password :col-type :text)
    (created-on :col-type :timestamptz
 	       :lock-value t
 	       :default (now))
@@ -35,7 +34,8 @@
 			     :on-update :cascade
 			     :no-join t))
    (validated :col-type :boolean
-	      :default "f")))
+	      :not-null t
+	      :default nil)))
 
 
 (define-db-table user-id ()
@@ -192,7 +192,7 @@
   :parent stw-db
   (with-active-layers (db-table-layer)
     (is string=
-	"CREATE TABLE IF NOT EXISTS stw_test_schema.user_account (id INTEGER NOT NULL, password TEXT NOT NULL, created_on TIMESTAMPTZ DEFAULT NOW(), created_by INTEGER NOT NULL, validated BOOLEAN DEFAULT 'f', PRIMARY KEY (id));"
+	"CREATE TABLE IF NOT EXISTS stw_test_schema.user_account (id INTEGER NOT NULL, password TEXT, created_on TIMESTAMPTZ DEFAULT NOW(), created_by INTEGER NOT NULL, validated BOOLEAN NOT NULL DEFAULT 'f', PRIMARY KEY (id));"
 	(create-table-statement (find-class 'user-account)))
 
     (is equal
@@ -283,11 +283,10 @@
 	(is eql 3 (length (cadr format-components)))
 	(loop
 	  for slot in (cadr format-components)
-	  do (of-type 'db-column-slot-definition slot))
+	  do (of-type 'db-column-slot-definition slot)))
 
-	(let ((foo-slot-definition (find-slot-definition (class-of *account*) 'handle 'db-column-slot-definition)))
-	  (is string= "'\"foo\"'" (stw.db::prepare-value% foo-slot-definition (slot-value *account* 'handle) t))
-	  (is string= "E'foo'" (stw.db::prepare-value% foo-slot-definition (slot-value *account* 'handle)))))
+      (let ((foo-slot-definition (find-slot-definition (class-of *account*) 'handle 'db-column-slot-definition)))
+	(is string= "E'foo'" (stw.db::prepare-value% foo-slot-definition (slot-value *account* 'handle))))
 
       (with-active-layers (insert-node)
 	(let ((procedure (generate-procedure *user* nil)))
@@ -298,7 +297,7 @@
 	      (slot-value procedure 'stw.db::args))
 	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[ ROW (~a)]::stw_test_schema.user_email_type[])"
 	      (slot-value procedure 'stw.db::p-control))
-	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[ ROW ('\"liam@foobar.com\"')]::stw_test_schema.user_email_type[])"
+	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[ ROW (E'liam@foobar.com')]::stw_test_schema.user_email_type[])"
 	      (dispatch-statement *user* procedure))))
 
       (setf (slot-value *account* 'email) "foo@bar.com")
@@ -344,7 +343,7 @@
 		'(("stw_test_schema.user_site_id") (:inout "insert_sites" "stw_test_schema.user_site_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw_test_schema.user_site_insert (1, ARRAY[ ROW ('\"foo.com\"'), ROW ('\"bar.com\"'), ROW ('\"baz.com\"')]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_insert (1, ARRAY[ ROW (E'foo.com'), ROW (E'bar.com'), ROW (E'baz.com')]::stw_test_schema.user_site_type[])"
 		(dispatch-statement *account* procedure))))
 	
 	(with-active-layers (delete-table)
@@ -357,7 +356,7 @@
 		'(("stw_test_schema.user_site_id") (:INOUT "delete_sites" "stw_test_schema.user_site_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw_test_schema.user_site_delete (1, ARRAY[ ROW ('\"foo.com\"'), ROW ('\"bar.com\"'), ROW ('\"baz.com\"')]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_delete (1, ARRAY[ ROW (E'foo.com'), ROW (E'bar.com'), ROW (E'baz.com')]::stw_test_schema.user_site_type[])"
 		(dispatch-statement *account* procedure))))))))
 
 

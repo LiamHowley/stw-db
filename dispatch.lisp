@@ -5,7 +5,7 @@
 calling db-template-register.")
 
   (:method
-      :in-layer db-op ((new-value procedure) (class serialize) component &rest rest &key &allow-other-keys)
+      :in-layer db-op (new-value (class serialize) component &rest rest &key &allow-other-keys)
     (let ((key (apply #'get-key class component rest)))
       (setf (gethash key (db-template-register)) new-value))))
 
@@ -75,10 +75,9 @@ and the control string p-control. Values are obtained from serialize.")
 				acc)
 			       ((atom inner)
 				(let* ((slot-name (slot-definition-name inner))
-				       (value (or (and (slot-boundp class slot-name)
-						       (slot-value class slot-name))
-						  "null"))
-				       (result (prepare-value% inner value escape)))
+				       (value (and (slot-boundp class slot-name)
+						   (slot-value class slot-name)))
+				       (result (prepare-value% inner value)))
 				  (cond (result
 					 (cons result acc))
 					(t acc))))
@@ -251,12 +250,12 @@ relevant instance of SLOT-MAPPING.")
 	do (return mapping))))
 
 
-(define-layered-function prepare-value% (slot value &optional escape)
+(define-layered-function prepare-value% (slot value)
   (:documentation "Parse slot for col-type, and call prepare-value.")
 
   (:method
-      :in db-layer ((slot db-column-slot-definition) value &optional escape)
-    (with-slots (col-type default not-null) slot
+      :in db-layer ((slot db-column-slot-definition) value)
+    (with-slots (col-type not-null) slot
       (let ((col-type (if (consp col-type)
 			  (car col-type)
 			  col-type)))
@@ -265,34 +264,33 @@ relevant instance of SLOT-MAPPING.")
 		((:text :varchar :char)
 		 :text)
 		(t col-type)))
-      (prepare-value slot col-type value escape))))
+      (prepare-value slot col-type value))))
 
   (:method
-      :in db-layer ((slot db-aggregate-slot-definition) values &optional escape)
+      :in db-layer ((slot db-aggregate-slot-definition) values)
     (with-slots (maps) slot
       (loop
 	with column = (mapped-column maps)
 	for value in values
-	collect (prepare-value% column value escape)))))
+	collect (prepare-value% column value)))))
 
 
 
-(define-layered-function prepare-value (slot col-type value escape)
+(define-layered-function prepare-value (slot col-type value)
   (:documentation "Prepare value for query. Specializes on keyword representation of col-type,
 specifically text/character types. While all strings are by default escaped, the use of escape
 indicates whether the string is wrapped in double quotes or whether the character E can be used
 before the first single quote.")
 
   (:method
-      :in db-layer ((slot db-column-slot-definition) (col-type (eql :text)) (value string) escape)
-      (if escape
-	  (concatenate 'string "'\"" value "\"'")
-	  (concatenate 'string "E'" value "'")))
+      :in db-layer ((slot db-column-slot-definition) (col-type (eql :text)) (value string))
+    (concatenate 'string "E'" value "'"))
 
   ;;; the rest
   (:method
-      :in db-layer ((slot db-column-slot-definition) col-type value escape)
-    (declare (ignore col-type escape))
+      :in db-layer ((slot db-column-slot-definition) col-type value)
+    (declare (ignore col-type))
     (cond (value (to-sql-string value))
-	  ((slot-value slot 'default)
-	   "null"))))
+	  ((slot-boundp slot 'default)
+	   (to-sql-string (slot-value slot 'default)))
+	  (t "null"))))

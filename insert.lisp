@@ -60,28 +60,27 @@
       procedure)))
 
 
-(define-layered-function include-tables (class))
-
-(define-layered-method include-tables
-  :in insert-node ((class serialize))
-  "Included tables must either:
+(define-layered-function include-tables (class)
+  (:method
+      :in insert-node ((class serialize))
+    "Included tables must either:
 1. have required-columns that are bound and not null, or
 2. have no required columns.
 Returns a list of tables."
-  (let ((tables (slot-value (class-of class) 'tables)))
-    (loop
-      with num = 0
-      for table in tables
-      for required = (require-columns (find-class table))
-      for include-table = (cond ((and required
-				      (loop
-					for slot in required
-					always (slot-to-go class slot)))
-				 t)
-				(required nil)
-				(t t))
-      when include-table
-	collect table)))
+    (let ((tables (slot-value (class-of class) 'tables)))
+      (loop
+	with num = 0
+	for table in tables
+	for required = (require-columns (find-class table))
+	for include-table = (cond ((and required
+					(loop
+					  for slot in required
+					  always (slot-to-go class slot)))
+				   t)
+				  (required nil)
+				  (t t))
+	when include-table
+	  collect table))))
 				
 
 
@@ -93,14 +92,17 @@ be present in CLASS, SLOT must be mapped and the mapping slot must be present, b
 and not null. Returns a boolean.")
 
   (:method
-      :in db-interface-layer ((class serialize) (slot db-column-slot-definition))
+      :in db-layer ((class serialize) (slot db-column-slot-definition))
     (let ((slot-name (slot-definition-name slot)))
       ;; is it a directly inherited slot or a mapped-slot
       (if (slot-exists-p class slot-name)
-	  (or (and (slot-boundp class slot-name)
-		   (slot-value class slot-name))
-	      (slot-value slot 'default)
-	      (eq (slot-value slot 'col-type) :serial))
+	  (with-slots (col-type not-null) slot
+	    (if not-null
+		(or (and (slot-boundp class slot-name)
+			 (slot-value class slot-name))
+		    (eq col-type :serial)
+		    (slot-boundp slot 'default))
+		t))
 	  (awhen (slot-value slot 'mapped-by)
 	    (loop
 	      for mapping in self
@@ -147,9 +149,9 @@ and not null. Returns a boolean.")
     (let* ((slot (car (filter-slots-by-type class 'db-column-slot-definition)))
 	   (column (column-name slot))
 	   (table-name (set-sql-name schema table))
-	   (declared-var (with-slots (col-type default) slot
+	   (declared-var (with-slots (col-type) slot
 			   (when (or (eq col-type :serial)
-				     default)
+				     (slot-boundp slot 'default))
 			     (declared-var (as-prefix table) slot)))))
       (values
        (class-name class)
@@ -176,9 +178,9 @@ and not null. Returns a boolean.")
       ;; :serial, or a default value.
       (loop
 	for column in (filter-slots-by-type class 'db-column-slot-definition)
-	for declared-var = (with-slots (col-type default) column
+	for declared-var = (with-slots (col-type) column
 			     (when (or (eq col-type :serial)
-				       default)
+				       (slot-boundp column 'default))
 			       (declared-var (as-prefix table) column)))
 	when declared-var
 	  collect declared-var into declared-vars%
@@ -242,8 +244,7 @@ and not null. Returns a boolean.")
 
 
 (define-layered-method generate-component
-  :in-layer insert-table ((map slot-mapping) function &key)
-  (declare (ignore function))
+  :in-layer insert-table ((map slot-mapping) (slot-to-go-p function) &key)
   (let ((table-class (mapped-table map))
 	(typed-array-name (format nil "insert_~(~a~)" (slot-definition-name (mapping-slot map)))))
     (with-slots (schema table require-columns) table-class
@@ -252,6 +253,8 @@ and not null. Returns a boolean.")
 	  for slot in (filter-slots-by-type table-class 'db-column-slot-definition)
 	  for column-name = (slot-value slot 'column-name)
 	  for domain = (slot-value slot 'domain)
+	  unless (funcall slot-to-go-p slot)
+	    do (return)
 	  if (member slot require-columns :test #'equality)
 	    collect column-name into required-columns
 	  else
@@ -270,9 +273,9 @@ and not null. Returns a boolean.")
 		     :param-controls `(,@p-controls ,(sql-typed-array table-class)))))))))
 
 
+
 (define-layered-method generate-component
-  :in-layer insert-table ((class db-table-class) function &key)
-  (declare (ignore function))
+  :in-layer insert-table ((class db-table-class) (slot-to-go-p function) &key)
   (with-slots (schema table require-columns) class
     (let ((type-array (format nil "~a.~a_type[]" schema table)))
       (loop
@@ -281,6 +284,9 @@ and not null. Returns a boolean.")
 	for domain = (slot-value slot 'domain)
 	for declared-var = (when (member slot require-columns :test #'equality)
 			     (declared-var (as-prefix table) slot))
+	for slot-value-p = (funcall slot-to-go-p slot)
+	unless slot-value-p
+	  do (return)
 	if declared-var
 	  collect column-name into required-columns
 	  and collect declared-var into declared-vars
@@ -305,7 +311,6 @@ and not null. Returns a boolean.")
 		   :declarations declared-vars
 		   :params `(,@args (,type-array) ,@out-args)
 		   :param-controls `(,@p-controls ,(sql-typed-array class) ,@out-values)))))))
-
 
 
 
