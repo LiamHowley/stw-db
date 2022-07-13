@@ -26,5 +26,5 @@
 		 (:file "select"))
     :long-description
     #.(uiop:read-file-string
-       (uiop:subpathname *load-pathname* "README.txt"))
+       (uiop:subpathname *load-pathname* "README.md"))
     :in-order-to ((test-op (load-op :stw-db-test))))
