@@ -88,7 +88,7 @@
 (define-layered-method generate-procedure
   :in-layer retrieve-node
   ((class serialize) component &rest rest
-   &key optional-join union-queries union-all-queries having group-by order-by limit select-columns ignore-tables)
+   &key optional-join union-queries union-all-queries order-by limit select-columns ignore-tables)
   (declare (ignore component))
 
   ;; During insert, delete and update operations, create procedure statements are
