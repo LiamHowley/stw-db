@@ -19,11 +19,12 @@ of an update affecting more than one tuple is high."))
 	 :object object))
 
 (defun not-an-error ()
-  "NULL-KEYS-ERROR is invoked when a root table key is either unbound or assigned null value.
-It is not always an error however. In specific contexts it my result in a delete operation, and
-an update, or even insert operations on tables not subject to a cascade.
-discrete records is desired. Bear in mind though that all other slots with or without
-values will determine the nature of the update query."
+  "NULL-KEY-ERROR is invoked when a root table key is either unbound or assigned null value.
+It is not always an error however. In specific contexts it my result in a delete operation, or
+an update, on tables not subject to a cascade.
+
+Bear in mind that all other slots with or without values will determine the nature of the 
+query."
   (let ((restart (find-restart 'not-an-error)))
     (when restart (invoke-restart restart))))
 
