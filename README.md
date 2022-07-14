@@ -1,12 +1,12 @@
 STW-DB is a context oriented Object Relational Model, that uses CONTEXTL and CL-POSTGRES to dynamically generate environmentally constrained stored procedures and query functions. Procedure/function generation is cached, and the appropriate procedure to be called is determined by the presence of slot values in the queried object. This is a beta version. The API is subject to change.
 
 
-#To Load
+# To Load
 
 Use quickload to call (ql:quickload :stw-db). If not found in the quickload repositories, add to your local-projects directory.
 
 
-#Connecting to a database
+# Connecting to a database
 
 Connections are made by passing an environment variable to the DB-CONNECT macro, along with a layered context. DB-CONNECT provides a  database connection `*DB*` that can be captured and called by database querying functions. Defining an environment variable is relatively straightforward: 
 
@@ -17,7 +17,7 @@ Connections are made by passing an environment variable to the DB-CONNECT macro,
 	    <-- do something here -->)`
 	    
 
-##Database parameters file
+## Database parameters file
 
 The database parameter file must contain the name of the database, the USER, PASSWORD and HOST. Optional parameters include PORT, POOLED-P, USE-SSL, USE-BINARY, SERVICE and APPLICATION-NAME. A template file can be found at source. If used it should be moved to a location outside of an application's home directory.
 
@@ -35,7 +35,7 @@ HOST="<db-host>"
 `
 
 
-##Connections
+## Connections
 
 By default STW-DB uses connection pools. Each connection pool is tied to an environment. For any specific environment a connection limit can be set either directly when defining the environment, or by use of the SET-CONNECTION-LIMIT macro.
 
@@ -46,16 +46,16 @@ Clearing a connection pool is achieved by passing a defined environment to the C
 Access to the connection pool is limited to the layered functions MAKE-CONNECTION and CLOSE-CONNECTION both of which are called automatically by the DB-CONNECT macro. Both make best attempts to use atomic procedures, otherwise a lock is used to protect pool access during push/pop operations.
 
 
-#STW-META and CONTEXTL
+# STW-META and CONTEXTL
 
 STW-DB uses STW-META, a thin wrapper around CONTEXTL. For further information about the protocol STW-DB uses to define table classes or interface nodes please see the documentation for STW-META. With that said, the section on class definition initialization is repeated here:
 
-8. Initializing the class definition - important!
+> 8. Initializing the class definition - important!
+>
+> As layered classes are subclasses of STANDARD-CLASS, initialization protocols proceed as per normal. As such, context specific initialization procedures should not be placed within initialize-instance, reinitialize-instance or shared-initialize methods. To put it simply, they are not thread safe. Instead the layered function INITIALIZE-IN-CONTEXT is called from the auxiliary :around method of shared-initialize, and after the call to call-next-method. Context and class specific initialization procedures should be placed in specialized instances of this layered functoin. It is for this reason that layered classes of type STW-BASE-CLASS are defined within their layer context.
 
-As layered classes are subclasses of STANDARD-CLASS, initialization protocols proceed as per normal. As such, context specific initialization procedures should not be placed within initialize-instance, reinitialize-instance or shared-initialize methods. To put it simply, they are not thread safe. Instead the layered function INITIALIZE-IN-CONTEXT is called from the auxiliary :around method of shared-initialize, and after the call to call-next-method. Context and class specific initialization procedures should be placed in specialized instances of this layered functoin. It is for this reason that layered classes of type STW-BASE-CLASS are defined within their layer context.
 
-
-##Context Layers
+## Context Layers
 
 There are three basic layers. The most primitive is DB-TABLE-LAYER, which as the name suggests is for direct mapping with database tables. The next is a higher level DB-INTERFACE-LAYER which interfaces with layered application objects. Both of the above inherit from DB-LAYER, which creates an environment within which it's sub-layers can nest and alternate.
 
@@ -63,7 +63,7 @@ Inheriting from DB-TABLE-LAYER is INSERT-TABLE and DELETE-TABLE. Inheriting from
 
 
 
-#Table Definitions
+# Table Definitions
 
 Three macros are provided for database table definitions: DEFINE-KEY-TABLE, DEFINE-DB-TABLE and DEFINE-INTERFACE-NODE.
 
@@ -71,6 +71,8 @@ DEFINE-KEY-TABLE defines a key table of type DB-KEY-TABLE in the DB-TABLE-LAYER 
 
 (define-key-table user-base () id)
 
+
+## DB-TABLE-CLASS
 
 DEFINE-DB-TABLE defines a key table of type DB-TABLE-CLASS in the DB-TABLE-LAYER context.
 
@@ -111,6 +113,8 @@ A table layer is also a singleton, and maps directly to database table/relation.
 	 :col-type :text)))`
 
 
+## DB-INTERFACE-NODE
+
 DEFINE-INTERFACE-NODE defines a layered class of type DB-INTERFACE-CLASS. An interface node, it inherits slots from one or more table classes, and can in turn be inherited itself. The type of DB-INTERFACE-CLASS slots is DB-AGGREGATE-SLOT-DEFINITION and is used to aggregate the multiple values of a one to many relation. It does so by mapping a slot of type DB-COLUMN-SLOT-DEFINITION from a class of type DB-TABLE-CLASS. For this end, DB-AGGREGATE-SLOT-DEFINITION provides initargs for :maps-table, :maps-column and :type. 
 
 `(define-interface-node account
@@ -121,18 +125,18 @@ In essence, an interface node is a tree of relations mapped onto a database. A l
 
 
 
-#Procedures and Functions
+# Procedures and Functions
 
 Procedures and functions are created by the layered function GENERATE-PROCEDURE, which is called by the layered function SYNC. SYNC takes an interface node and component, and various keyword arguments, and caches the resulting procedure/function.
 
 
 
-#Refreshing the Cache
+# Refreshing the Cache
 
 To refresh the cached procedure simply set the refresh-cache keyword when invoking SYNC.
 
 
-#DB Queries and Operations
+# DB Queries and Operations
 
 ##Inserting a record:
 
@@ -145,14 +149,14 @@ To insert into one table only provide the additional component (table) class, an
 `(db-connect db (insert-table) (sync (make-instance 'account) (find-class 'user-site)))`
 
 
-##Updating a record:
+## Updating a record:
 
 `(db-connect db (update-node) (sync <old> <new>))`
 
 In this instance <old> refers to the original application object that we wish to update where appropriate with the values in <new>. Once again the procedure generated accords to the presence of values in <new> that differ from the values in <old>. A necessary condition to updating an object is that the key-column value in <old> corresponds to the key-column value in <new>. Otherwise the objects will be assumed to belong to different records and will result in an error. Updated columns are returned and their values assigned to the relevant slots in class <old>
 
 
-##Deleting a record:
+## Deleting a record:
 
 `(db-connect db (insert-node) (sync <object> nil))`
 
@@ -166,7 +170,7 @@ To delete from one table only provide the additional component (table) class, an
 `(db-connect db (delete-table) (sync (make-instance 'account) (find-class 'user-site)))`
 
 
-##Retrieving a record:
+## Retrieving a record:
 
 `(db-connect db (retrieve-node) (sync <object> nil))`
 
@@ -174,7 +178,7 @@ In retrieving a node the values assigned to slots are used in the "where" clause
 
 
 
-##Setting up:
+## Setting up:
 
 The simplest procedure for setting up is to attempt to insert a record and let the insert fail. If a schema, table, type, or procedure is unknown, a database-error is returned and the necessary resource created recursively. Otherwise, a slew of layered functions is available to: CREATE-SCHEMA, SET-SCHEMA, SET-PRIVILEGED-USER, CREATE-TABLE-STATEMENT, FOREIGN-KEY-STATEMENTS, CREATE-PG-COMPOSITE, CREATE-TYPED-DOMAIN.
 
@@ -182,26 +186,27 @@ Note: All foreign keys unless already indexed are automatically indexed.
 
 
 
-##Tearing down:
+## Tearing down:
 
 TRUNCATE-TABLE, DROP-TABLE and DROP-SCHEMA, all require user confirmation to proceed.
 
 
 
-#Conditions and Restarts
+# Conditions and Restarts
 
-##NULL-KEY-ERROR
+## NULL-KEY-ERROR
 
 Should the primary keys of the root table be unbound or null during an update or delete operation, an error of NULL-KEY-ERROR is invoked. As deleting / updating multiple rows according to specific column values may well have been the goal of the operation, a restart NOT-AND-ERROR is provided, which mimics the behaviour of the CONTINUE restart.
 
 
-##UPDATE-KEY-VALUE-ERROR
+## UPDATE-KEY-VALUE-ERROR
 
 On copying an interface node object: If the original node has a root table primary key value while the clone has either no value, is unbound, or a value that does not match the original node, a correctable UPDATE-KEY-VALUE-ERROR is invoked, and the restart USE-EXPECTED-VALUE is provided. USE-EXPECTED-VALUE takes the value assigned to the primary keys of the original node, and assigns them to the respective slots of the clone, before continuing on its merry way. Thus a normal update may proceed. This is useful if updating a bunch of different nodes to fit a template of values. Say for example to reset values to some default. However, in the event that an update of values is desired, select CONTINUE. It should be noted though, that while an update will occur, the final operation will be a delete operation, where the root key record(s) being derived from select statement using supplied values are then deleted. As such any keys defaulting to a cascade, on deletion, will be lost.
 
 
-#TO DO
+# TO DO
 
-- Add support for additional options for select queries, not least including an OR operator option, aggregate functions such as count, max with having and group-by, etc. The latter could be done by adding an additional interface type.
+- Add support for additional options for select queries, not least including an OR operator option, aggregate functions such as count, max, etc, with having and group-by. The latter could be done by adding an additional interface type/context???
+- Add support for multiple mapped columns per aggregate slot, with results mapped into objects, lists, arrays, according to slot type.
 - Add additional transaction support for procedures such as commit, rollback, and savepoint.
 - Revisit dates, and look at intervals.
