@@ -53,5 +53,3 @@
       (is string= (slot-value new-account 'email) "baz@foobar.com")
       (is string= (slot-value *new-account* 'email) (slot-value account 'email))
       (is string= (slot-value *new-account* 'email) (slot-value new-account 'email)))))
-
-

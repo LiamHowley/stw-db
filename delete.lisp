@@ -139,7 +139,7 @@ have no value.")
 				      (member column require-columns :test #'equality))
 			     (declared-var (as-prefix table) column "delete"))
 	for slot-value-p = (funcall slot-to-go-p column)
-	when (and slot-value-p declared-var)
+	when declared-var
 	  collect declared-var into declared-vars
 	  and collect (set-sql-name table (column-name column)) into returning-columns
 	  and collect (car (var-var declared-var)) into vars

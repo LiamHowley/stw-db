@@ -97,26 +97,25 @@
 
 
 (define-db-table user-handle ()
-  ((handle :col-type :text
-	   :not-null t
-	   :primary-key t)
-   (id :col-type :integer
+  ((id :col-type :integer
        :primary-key t
        :foreign-key (:table user-base
 		     :column id
 		     :on-delete :cascade
-		     :on-update :cascade))))
+		     :on-update :cascade))
+   (handle :col-type :text
+	   :not-null t)))
 
 
 (define-db-table user-url ()
-  ((url :col-type :text
-	:primary-key t)
-   (id :col-type :integer
+  ((id :col-type :integer
        :primary-key t
        :foreign-key (:table user-base
 		     :column id
 		     :on-delete :cascade
-		     :on-update :cascade))))
+		     :on-update :cascade))
+   (url :col-type :text
+	:not-null t)))
 
 
 (define-db-table validate ()
@@ -315,10 +314,10 @@
       (with-active-layers (update-node)
 	(let ((clone (clone-object *account*)))
 	  (setf (slot-value clone 'email) "bar@foo.com")
-	  (fail (get-key *account* clone) 'null-key-error "Null value for key ID in class ACCOUNT.")
+	  (fail (stw.db::match-primary-keys *account* clone) 'null-key-error "Null value for key ID in class ACCOUNT.")
 	  (setf (slot-value *account* 'id) 1
 		(slot-value clone 'id) 2)
-	  (fail (get-key *account* clone) 'update-key-value-error "Expected value: 1. Received value: 2.")
+	  (fail (stw.db::match-primary-keys *account* clone) 'update-key-value-error "Expected value: 1. Received value: 2.")
 	  (setf (slot-value clone 'id) 1)
 	  (let ((procedure (generate-procedure *account* clone)))
 	    (of-type stw.db::procedure procedure)
