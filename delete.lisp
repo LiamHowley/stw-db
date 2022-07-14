@@ -10,8 +10,7 @@
     (loop
       for slot in primary-keys
       for slot-name = (slot-definition-name slot)
-      for slot-value-p = (when (slot-boundp class slot-name)
-			   (slot-value class slot-name))
+      for slot-value-p = (slot-value class slot-name)
       unless slot-value-p
       do (restart-case (null-key-error slot-name class)
 	   (not-an-error ()
@@ -53,8 +52,7 @@ not set to cascade on deletion, then data will be orphaned."
     (with-slots (schema sql-list args p-controls relevant-slots) procedure
       (if (every (lambda (slot)
 		   (let ((slot-name (slot-definition-name slot)))
-		     (and (slot-boundp class slot-name)
-			  (slot-value class slot-name))))
+			  (slot-value class slot-name)))
 		 root-columns)
 	  (loop
 	    for column in root-columns
@@ -95,9 +93,8 @@ have no value.")
 		 (when slots
 		   (let* ((slot (car slots))
 			  (slot-name (slot-definition-name slot)))
-		     (when (and (slot-boundp class slot-name)
-				  (or (slot-value class slot-name)
-				      (eq (slot-value slot 'col-type) :boolean)))
+		     (when (or (slot-value class slot-name)
+			       (eq (slot-value slot 'col-type) :boolean))
 		       (pushnew (class-name
 				 (typecase slot
 				   (db-column-slot-definition

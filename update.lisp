@@ -7,10 +7,8 @@
   (loop
     for slot in (filter-slots-by-type (class-of old) 'db-base-column-definition) 
     for slot-name = (slot-definition-name slot)
-    for old-value = (when (slot-boundp old slot-name)
-		      (slot-value old slot-name))
-    for new-value = (when (slot-boundp new slot-name)
-		      (slot-value new slot-name))
+    for old-value = (slot-value old slot-name)
+    for new-value = (slot-value new slot-name)
     when old-value
       collect slot-name into where 
     when new-value
@@ -34,35 +32,32 @@ or primary keys not matching will invoke an error.")
 
   (:method
       :in-layer update ((old serialize) (new serialize))
-    (flet ((primary-key-value (class slot-name)
-	     (when (slot-boundp class slot-name)
-	       (slot-value class slot-name))))
-      (let* ((key-table (car (slot-value (class-of old) 'tables)))
-	     (primary-keys (slot-value (find-class key-table) 'primary-keys)))
-	(loop
-	  for slot in primary-keys
-	  for slot-name = (slot-definition-name slot)
-	  for new-value = (primary-key-value new slot-name)
-	  do (aif (primary-key-value old slot-name)
-		  (flet ((update-value-error ()
-			   (restart-case (update-key-value-error self new-value)
-			     (use-expected-value ()
-			       :report (lambda (s)
-					 (format s "Use expected value: ~a" self))
-			       (setf (slot-value new slot-name) self)))))
-		    (if new-value
-			(unless (equal self new-value)
-			  (update-value-error))
-			(update-value-error)))
-		  (restart-case (null-keys-error slot-name old)
-		    (not-an-error ()
-		      :report (lambda (s)
-				(write-string "This is not an error. Please continue" s))
-		      :test (lambda (c)
-			      (declare (ignore c))
-			      (unless new-value
-				t))
-		      nil))))))))
+    (let* ((key-table (car (slot-value (class-of old) 'tables)))
+	   (primary-keys (slot-value (find-class key-table) 'primary-keys)))
+      (loop
+	for slot in primary-keys
+	for slot-name = (slot-definition-name slot)
+	for new-value = (slot-value new slot-name)
+	do (aif (slot-value old slot-name)
+		(flet ((update-value-error ()
+			 (restart-case (update-key-value-error self new-value)
+			   (use-expected-value ()
+			     :report (lambda (s)
+				       (format s "Use expected value: ~a" self))
+			     (setf (slot-value new slot-name) self)))))
+		  (if new-value
+		      (unless (equal self new-value)
+			(update-value-error))
+		      (update-value-error)))
+		(restart-case (null-key-error slot-name old)
+		  (not-an-error ()
+		    :report (lambda (s)
+			      (write-string "This is not an error. Please continue" s))
+		    :test (lambda (c)
+			    (declare (ignore c))
+			    (unless new-value
+			      t))
+		    nil)))))))
 
 
 
@@ -189,27 +184,27 @@ or primary keys not matching will invoke an error.")
 			(loop
 			  for (prefix compo) on component by #'cddr
 			  do (process-many-to-one-component prefix compo)))))
-		(flet ((op (table)
+		(flet ((op (prefix table)
 			 (awhen (generate-component table
 						    #'(lambda (slot)
 							(slot-to-go new slot)))
-			   (process-many-to-one-component :delete self))))
+			   (process-many-to-one-component prefix self))))
 		  (when to-insert
 		    (loop
 		      for table in to-insert
 		      do (with-active-layers (insert-table)
-			   (op table))))
+			   (op :insert table))))
 		  (when to-delete
 		    (aif (member-if #'(lambda (class)
 					(eq (class-name class)
 					    (car (slot-value base-class 'tables))))
 				    to-delete)
 			 (with-active-layers (delete-table)
-			   (op (car self)))
+			   (op :delete (car self)))
 			 (loop
 			   for table in to-delete
 			   do (with-active-layers (delete-table)
-				(op table)))))))
+				(op :delete table)))))))
 	      (setf sql-list (nreverse (push "RETURN;" sql-list))))))))
     procedure))
 
@@ -239,10 +234,8 @@ or primary keys not matching will invoke an error.")
       with set = nil
       for slot in (filter-slots-by-type (class-of old) 'db-column-slot-definition) 
       for slot-name = (slot-definition-name slot)
-      for old-value = (when (slot-boundp old slot-name)
-			(slot-value old slot-name))
-      for new-value = (when (slot-boundp new slot-name)
-			(slot-value new slot-name))
+      for old-value = (slot-value old slot-name)
+      for new-value = (slot-value new slot-name)
       for table = (slot-value slot 'table-class)
       when old-value
 	do (pushnew table where :test #'eq)
@@ -270,12 +263,8 @@ db-column-slot-definition.")
 		   (when slots
 		     (let* ((slot (car slots))
 			    (slot-name (slot-definition-name slot))
-			    (old-boundp (slot-boundp old slot-name))
-			    (new-boundp (unless (lock-value slot)
-					  (slot-boundp new slot-name)))
-			    (old-value (when old-boundp
-					 (slot-value old slot-name)))
-			    (new-value (when new-boundp
+			    (old-value (slot-value old slot-name))
+			    (new-value (unless (lock-value slot)
 					 (slot-value new slot-name)))
 			    (exceptionp (lambda (slot value)
 					  (with-slots (col-type not-null) slot
@@ -313,10 +302,8 @@ db-aggregate-slot-definition.")
     (loop
       for slot in (filter-slots-by-type (class-of old) 'db-aggregate-slot-definition)
       for slot-name = (slot-definition-name slot)
-      for old-values = (when (slot-boundp old slot-name)
-			 (slot-value old slot-name))
-      for new-values = (when (slot-boundp new slot-name)
-			 (slot-value new slot-name))
+      for old-values = (slot-value old slot-name)
+      for new-values = (slot-value new slot-name)
       for to-delete = (set-difference old-values new-values :test #'equal)
       for to-insert = (set-difference new-values old-values :test #'equal)
       for maps = (slot-value slot 'maps)

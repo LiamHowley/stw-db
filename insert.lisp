@@ -98,8 +98,7 @@ and not null. Returns a boolean.")
       (if (slot-exists-p class slot-name)
 	  (with-slots (col-type not-null) slot
 	    (if not-null
-		(or (and (slot-boundp class slot-name)
-			 (slot-value class slot-name))
+		(or (slot-value class slot-name)
 		    (eq col-type :serial)
 		    (slot-boundp slot 'default))
 		t))
@@ -108,7 +107,6 @@ and not null. Returns a boolean.")
 	      for mapping in self
 		thereis (let ((slot-name (slot-definition-name (mapping-slot mapping))))
 			  (and (eq (mapping-node mapping) (class-of class))
-			       (slot-boundp class slot-name)
 			       (slot-value class slot-name)))))))))
 
 

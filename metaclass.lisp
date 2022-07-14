@@ -381,3 +381,7 @@ dispatching on type."
 	       'db-interface-class)))
     `(define-db-class ,name db-interface-layer ,metaclass
        ,@body)))
+
+
+(defmethod slot-unbound ((class db-interface-class) instance slot-name)
+  nil)
