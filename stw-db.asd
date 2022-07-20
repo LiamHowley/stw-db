@@ -1,6 +1,7 @@
 (defsystem "stw-db"
     :depends-on ("stw-meta"
 		 "stw-utils"
+		 "uuid"
 		 "cl-postgres"
 		 "bordeaux-threads"
 		 "atomics"

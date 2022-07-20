@@ -375,10 +375,10 @@
 	  '((:IN "_email" "stw_test_schema.user_email_email"))
 	  (slot-value function 'stw.db::args))
       (is string=
-	  "user_retrievec3$1$2$3$4$5$6$7"
+	  "user_retrieve_b0f3692a_5de7_38cc_8a03_744f798522ad"
 	  (slot-value function 'stw.db::name))
       (is string=
-	  "SELECT * FROM stw_test_schema.user_retrievec3$1$2$3$4$5$6$7 (~a::stw_test_schema.user_email_email)"
+	  "SELECT * FROM stw_test_schema.user_retrieve_b0f3692a_5de7_38cc_8a03_744f798522ad (~a::stw_test_schema.user_email_email)"
 	  (slot-value function 'stw.db::p-control))
       (is string=
 	  "SELECT stw_test_schema.user_base.id, stw_test_schema.user_id.user_id, stw_test_schema.user_email.email FROM stw_test_schema.user_base INNER JOIN stw_test_schema.user_id ON (stw_test_schema.user_base.id = stw_test_schema.user_id.id) INNER JOIN stw_test_schema.user_email ON (stw_test_schema.user_id.id = stw_test_schema.user_email.id AND stw_test_schema.user_id.user_id = stw_test_schema.user_email.user_id) WHERE stw_test_schema.user_email.email = $1;"

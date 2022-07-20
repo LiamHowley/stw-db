@@ -111,6 +111,11 @@
    :universal-to-timestamp
    :set-local-time-cl-postgres-readers)
 
+  (:import-from
+   :uuid
+   :make-v3-uuid
+   :+namespace-oid+)
+
   (:export
    :define-db-table
    :define-key-table

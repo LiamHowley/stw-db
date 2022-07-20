@@ -128,27 +128,11 @@
 		   rest)
 	  (let ((db-function (make-instance 'db-function
 					    :schema schema
-					    :name (flet ((key-params (pos params)
-							   (format nil "$~a~@[$~{_~a_~}~]" pos
-								   (mapcar #'(lambda (column)
-									       (position column tables :test #'eq))
-									   params))))
-						    (format nil "~a_retrieve~a~a~a~a~a~a~a~a"
-							    (db-syntax-prep (class-name base-class))
-							    (format nil "~@[~{c~a~}~]" positions)
-							    (key-params 1 optional-join)
-							    (key-params 2 union-queries)
-							    (key-params 3 union-all-queries)
-							    (key-params 4 order-by)
-							    (key-params 5 limit)
-							    (key-params 6 ignore-tables)
-							    (format nil "$~a~@[~{$~a~}~]" 7
-								    (when select-columns
-								      (mapcar
-								       #'(lambda (column)
-									   (position (slot-definition-name column)
-										     slot-names :test #'eq))
-								       select-columns)))))
+					    :name (format nil "~a_retrieve_~a"
+							  (db-syntax-prep (class-name base-class))
+							  (db-syntax-prep
+							   (write-to-string
+							    (make-v3-uuid +namespace-oid+ (write-to-string `(,@slot-names ,@rest))))))
 					    :vars (if select-columns
 						      (mapcar #'(lambda (column)
 								  (return-var column))
