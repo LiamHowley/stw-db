@@ -3,6 +3,12 @@
 (define-condition invalid-operator-error (simple-error)
   ())
 
+(defun invalid-operator-error (format-control &rest format-args)
+  (error 'invalid-operator-error
+	 :format-control format-control
+	 :format-arguments format-args))
+
+
 (define-condition null-key-error (simple-error)
   ((slot-name :initarg :slot-name :reader slot-name)
    (object :initarg :object :reader object))
