@@ -19,7 +19,7 @@
       '(OR (AND (> 3 FOO) (< 5 BAR)) (AND (> ID 10) (< ID 13))))
   (is equal
       (infix-constraint '(or (/= "alive") (= "dead")) "person") 
-      "((person <> 'alive') OR (person = 'dead'))")
+      "((person <> E'alive') OR (person = E'dead'))")
   (is equal
       (infix-constraint '(or (and (/= "alive")(= "happy"))(= "dead")) "person") 
-      "(((person <> 'alive') AND (person = 'happy')) OR (person = 'dead'))"))
+      "(((person <> E'alive') AND (person = E'happy')) OR (person = E'dead'))"))

@@ -55,44 +55,42 @@
 
 (defun sql-op (op)
   (declare (optimize (speed 3) (safety 0)))
-  (setf op
-	(case op
-	  ((char-equal
-	    char=
-	    string-equal
-	    string=
-	    equalp
-	    equal
-	    eql
-	    eq)
-	   :=)
-	  ((char-not-equal
-	    char/=
-	    string-not-equal
-	    string/=
-	    /=)
-	   :<>)
-	  ((char<
-	    char-lessp
-	    string<
-	    string-lessp)
-	   :<)
-	  ((char>
-	    char-greaterp
-	    string>
-	    string-greaterp)
-	   :>)
-	  ((char<=
-	    char-not-greaterp
-	    string<=
-	    string-not-greaterp)
-	   :<=)
-	  ((char>=
-	    char-not-lessp
-	    string>=
-	    string-not-lessp)
-	   :>=)
-	  (t op))))
+  (case op
+    ((char-equal
+      char=
+      string-equal
+      string=
+      equalp
+      equal
+      eql
+      eq)
+     :=)
+    ((char-not-equal
+      char/=
+      string-not-equal
+      string/=
+      /=)
+     :<>)
+    ((char<
+      char-lessp
+      string<
+      string-lessp)
+     :<)
+    ((char>
+      char-greaterp
+      string>
+      string-greaterp)
+     :>)
+    ((char<=
+      char-not-greaterp
+      string<=
+      string-not-greaterp)
+     :<=)
+    ((char>=
+      char-not-lessp
+      string>=
+      string-not-lessp)
+     :>=)))
 
 
 (defun infill-column (list column)
@@ -115,7 +113,8 @@
 (defun infix-constraint (list &optional column)
   "Infixing is done in the process of creating a constraint. COLUMN is optional
 but must be provided if not already encoded within LIST."
-  (let ((op (sql-op (car list))))
+  (let ((op (or (sql-op (car list))
+		(car list))))
     (cond ((consp op)
 	   (invalid-operator-error "~a is not a valid operator." (car list)))
 	  ((eql (list-length list) 2)
@@ -127,7 +126,7 @@ but must be provided if not already encoded within LIST."
 			 (typecase (car inner)
 			   (string
 			    (cons (if (equal (car inner) (car (last inner)))
-				      (format nil "'~a'" (car inner))
+				      (format nil "E'~a'" (car inner))
 				      (format nil "~a" (car inner)))
 				  (push op acc)))
 			   (atom
@@ -135,3 +134,42 @@ but must be provided if not already encoded within LIST."
 			   (cons 
 			    (cons (infix-constraint (car inner) column) (push op acc))))))))
       (walk (cdr list) nil))))
+
+
+(defun infix-where-clause (list function)
+  "Infixing is done in the process of creating a clause."
+  (let (positions)
+    (values 
+     (labels ((walk-outer (list%)
+		(let ((op (or (sql-op (car list%))
+			      (car list%))))
+		  (cond ((consp op)
+			 (invalid-operator-error "~a is not a valid operator." (car list%)))
+			((eql (list-length list%) 2)
+			 (awhen (nth-value 1 (funcall function (cadr list%)))
+			   (push self positions)
+			   (push (format nil "$~a" (1+ self)) (cddr list%)))))
+		  (labels ((walk-inner (inner acc)
+			     (if (null inner)
+				 (format nil "~a" (nreverse (butlast acc)))
+				 (walk-inner (cdr inner)
+					     (aif (when (atom (car inner))
+						    (funcall function (car inner)))
+						  (cons self (push op acc))
+						  (cons (walk-outer (car inner)) (push op acc)))))))
+		    (when list%
+		      (walk-inner (cdr list%) nil))))))
+       (walk-outer list))
+     positions)))
+
+
+(define-layered-function find-column-slot (class slot-name)
+  (:method
+      :in db-layer ((class db-interface-class) slot-name)
+    (awhen (find-slot-definition class slot-name 'db-base-column-definition)
+      (typecase self
+	(db-column-slot-definition
+	 self)
+	(db-aggregate-slot-definition
+	 (mapped-column (slot-value self 'maps)))))))
+   

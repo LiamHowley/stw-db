@@ -78,6 +78,7 @@
 								(date/time-p (slot-value slot 'col-type))))))))
     (push slots rest)))
 
+
 (define-layered-method sync
   :in retrieve-node
   ((class serialize) component &rest rest 
@@ -88,7 +89,7 @@
 (define-layered-method generate-procedure
   :in-layer retrieve-node
   ((class serialize) component &rest rest
-   &key optional-join union-queries union-all-queries order-by limit select-columns ignore-tables)
+   &key optional-join union-queries union-all-queries order-by limit select-columns ignore-tables where)
   (declare (ignore component))
 
   ;; During insert, delete and update operations, create procedure statements are
@@ -107,21 +108,29 @@
     (test-queries union-queries)
     (test-queries union-all-queries))
 
-  (let* ((base-class (class-of class))
-	 (schema (slot-value base-class 'schema))
-	 (tables (tables base-class))
-	 (select (make-instance 'select
-				:order-by order-by
-				:limit limit)))
-    (multiple-value-bind (slots-with-values slot-names positions)
-	(slots-with-values class
-			   :type 'db-base-column-definition
-			   :filter-if #'(lambda (slot)
-					  (when (typep slot 'db-column-slot-definition)
-					    (date/time-p (slot-value slot 'col-type)))))
-      (let ((slot-value-p #'(lambda (slot)
-			      (awhen (position (slot-definition-name slot) slot-names)
-				(1+ self)))))
+  (multiple-value-bind (slots-with-values slot-names)
+      (slots-with-values class
+			 :type 'db-base-column-definition
+			 :filter-if #'(lambda (slot)
+					(when (typep slot 'db-column-slot-definition)
+					  (date/time-p (slot-value slot 'col-type)))))
+    (let* ((base-class (class-of class))
+	   (schema (slot-value base-class 'schema))
+	   (tables (tables base-class))
+	   (select (make-instance 'select
+				  :order-by order-by
+				  :limit limit))
+	   (slot-value-p #'(lambda (slot)
+			     (awhen (position (slot-definition-name slot) slot-names)
+			       (1+ self)))))
+      (multiple-value-bind (where% positions)
+	  (infix-where-clause where
+			      #'(lambda (slot-name)
+				  (if (member slot-name slot-names :test #'eq) 
+				      (let* ((position (position slot-name slot-names :test #'eq))
+					     (slot (nth position slots-with-values)))
+					(values (set-sql-name schema (column-name slot)) position))
+				      slot-name)))
 	(multiple-value-bind (components returns)
 	    (apply #'generate-components base-class
 		   :slot-value-p slot-value-p
@@ -197,13 +206,18 @@
 				      (append union-queries union-all-queries)))))
 		  (setf where (nconc where
 				     (loop
+				       for i from 0
 				       for slot in slots-with-values
-				       for where% = (when (slot-relevant-p slot)
-						      (wherep slot slot-value-p))
-				       when where%
-					 collect where%))
-			sql-query (concatenate 'string (statement select) ";"))))
-	      db-function)))))))
+				       for clause = (when (slot-relevant-p slot)
+						      (unless (member i positions)
+							(wherep slot slot-value-p)))
+				       when clause
+					 collect clause into where%%
+				       finally (return (if where%
+							   `(,@where%% ,where%)
+							   where%%))))
+			sql-query (concatenate 'string (statement select) ";")))))
+	    db-function))))))
 
 
 (define-layered-function return-var (slot)
@@ -255,7 +269,7 @@
       :in retrieve-node ((slot db-column-slot-definition) (slot-value-p function))
     (awhen (funcall slot-value-p slot)
       (with-slots (schema table column-name) slot
-	(list (set-sql-name schema table column-name) := (format nil "$~a" self))))))
+	(format nil "~a = $~a" (set-sql-name schema table column-name) self)))))
 
 
 
@@ -539,7 +553,7 @@
 	      (ensure-list from)
 	      joins
 	      (list (format nil "~@[ GROUP BY ~{~a~^, ~}~]" (ensure-list group-by))
-		    (format nil "~@[ WHERE ~{~{~a ~a ~a~}~^ AND ~}~]" where)
+		    (format nil "~@[ WHERE ~{~a~^ AND ~}~]" where)
 		    (format nil "~@[ ORDER BY ~{~a~^, ~}~]"
 			    (loop for order in (ensure-list order-by)
 				  collect (format nil (typecase order

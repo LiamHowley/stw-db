@@ -206,7 +206,7 @@ On copying an interface node object: If the original node has a root table prima
 
 # TO DO
 
-- Add support for additional options for select queries, not least including an OR operator option, aggregate functions such as count, max, etc, with having and group-by. The latter could be done by adding an additional interface type/context???
+- Add support for additional options for select queries: aggregate functions such as count, max, etc, with having and group-by. The latter could be done by adding an additional interface type/context???
 - Add support for multiple mapped columns per aggregate slot, with results mapped into objects, lists, arrays, according to slot type.
 - Add additional transaction support for procedures such as commit, rollback, and savepoint.
 - Revisit dates, and look at intervals.
