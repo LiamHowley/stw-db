@@ -342,6 +342,16 @@ don't belong in this node or a foreign key is required" self))
 	(slot-value root-table 'primary-keys))))
   
 
+(define-layered-function find-column-slot (class slot-name)
+  (:method
+      :in db-layer ((class db-interface-class) slot-name)
+    (awhen (find-slot-definition class slot-name 'db-base-column-definition)
+      (typecase self
+	(db-column-slot-definition
+	 self)
+	(db-aggregate-slot-definition
+	 (mapped-column (slot-value self 'maps)))))))
+   
 
 (defmacro define-db-class (name layer metaclass &body body)
   (unless (serialized-p (car body))

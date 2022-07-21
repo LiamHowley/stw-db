@@ -161,15 +161,3 @@ but must be provided if not already encoded within LIST."
 		      (walk-inner (cdr list%) nil))))))
        (walk-outer list))
      positions)))
-
-
-(define-layered-function find-column-slot (class slot-name)
-  (:method
-      :in db-layer ((class db-interface-class) slot-name)
-    (awhen (find-slot-definition class slot-name 'db-base-column-definition)
-      (typecase self
-	(db-column-slot-definition
-	 self)
-	(db-aggregate-slot-definition
-	 (mapped-column (slot-value self 'maps)))))))
-   
