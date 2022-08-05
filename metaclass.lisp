@@ -259,13 +259,16 @@ with a single column of type serial."))
 	(loop
 	  for slot in (filter-slots-by-type class 'db-aggregate-slot-definition)
 	  do (with-slots (maps) slot
-	       (with-slots (mapping-node mapped-table mapped-column) maps
+	       (with-slots (mapping-node mapped-table mapped-column mapped-columns) maps
 		 (setf mapping-node class)
 		 (pushnew (class-name mapped-table) tables :test #'eq)
 		 (collate-keys mapped-table)
 		 (pushnew maps (slot-value class 'maps) :test #'eq)
 		 (pushnew maps (slot-value mapped-column 'mapped-by) :test #'eq)
-		 (pushnew maps (slot-value mapped-table 'mapped-by) :test #'eq))))
+		 (pushnew maps (slot-value mapped-table 'mapped-by) :test #'eq)
+		 (loop
+		   for column in mapped-columns
+		   do (pushnew maps (slot-value column 'mapped-by) :test #'eq)))))
 	(let ((sorted-tables (sort-tables backtrace-table)))
 	  (awhen (ensure-bound-tables tables sorted-tables)
 	    (warn "the table(s) ~{~a^ ~} are not bound. They either 
