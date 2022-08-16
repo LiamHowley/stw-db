@@ -121,8 +121,18 @@
 				  :order-by order-by
 				  :limit limit))
 	   (slot-value-p #'(lambda (slot)
-			     (awhen (position (slot-definition-name slot) slot-names)
-			       (1+ self)))))
+			     (flet ((valuep (slot)
+				      (when slot
+					(awhen (position (slot-definition-name slot) slot-names)
+					  (values (1+ self) slot)))))
+			       (valuep
+				(etypecase slot
+				  (db-column-slot-definition
+				   (aif (match-mapping-node base-class slot)
+					(mapping-slot self)
+					slot))
+				  (db-aggregate-slot-definition
+				   slot)))))))
       (multiple-value-bind (where% positions)
 	  (infix-where-clause where
 			      #'(lambda (slot-name)
@@ -219,6 +229,16 @@
 			sql-query (concatenate 'string (statement select) ";")))))
 	    db-function))))))
 
+;; (notany #'(lambda (table)
+;;	     (map-filtered-slots
+;;	      (find-class table)
+;;	      #'(lambda (slot)
+;;		  (typep slot 'db-column-slot-definition))
+;;	      #'(lambda (slot%)
+;;		  (or (eq slot% slot)
+;;		      (with-aggregate-slot slot
+;;			(or (eq slot% column)
+;;			    (member slot% columns :test #'eq)))))))
 
 (define-layered-function return-var (slot)
 
@@ -230,9 +250,13 @@
 
   (:method
       :in retrieve-node ((slot db-aggregate-slot-definition))
-      (let ((mapped-column (mapped-column (maps slot))))
-	(list (db-syntax-prep (slot-definition-name slot))
-	      (format nil "~a[]" (col-type mapped-column))))))
+    (with-aggregate-slot slot
+      (list (db-syntax-prep (slot-definition-name slot))
+	    (cond (column
+		   (format nil "~a[]" (col-type column)))
+		  (columns
+		   "JSON")
+		  (t (error "No mapped column(s) in slot ~a" (slot-definition-name slot))))))))
 
 
 (define-layered-function input-arg (slot)
@@ -244,10 +268,18 @@
 
   (:method
       :in retrieve-node ((slot db-aggregate-slot-definition))
-    (let* ((mapped-column (mapped-column (maps slot))))
-	(list :in
-	      (format nil "_~a" (db-syntax-prep (slot-definition-name slot)))
-	      (format nil "~a[]" (col-type mapped-column))))))
+    (with-aggregate-slot slot
+      (let ((table-class (mapped-table map)))
+	(cond (column
+	       (list :in
+		     (format nil "_~a" (db-syntax-prep (slot-definition-name slot)))
+		     (format nil "~a[]" (col-type column))))
+	      (columns
+	       (with-slots (schema table) table-class
+		 (list :in
+		       (format nil "_~a" (db-syntax-prep (slot-definition-name slot)))
+		       (format nil "~a.~a_type[]" schema table))))
+	      (t (error "No mapped column(s) in slot ~a" (slot-definition-name slot))))))))
 
 
 (define-layered-function input-control (slot)
@@ -255,21 +287,43 @@
   (:method
       :in retrieve-node ((slot db-column-slot-definition))
     (with-slots (schema domain) slot
-	(list (format nil "~~a::~a" (set-sql-name schema domain)) slot)))
+      (list (format nil "~~a::~a" (set-sql-name schema domain)) slot)))
 
   (:method
       :in retrieve-node ((slot db-aggregate-slot-definition))
-    (let ((mapped-column (mapped-column (maps slot))))
-      (list "ARRAY[~{~a~^, ~}]" mapped-column))))
+    (with-aggregate-slot slot
+      (cond (column
+	     (list "ARRAY[~{~a~^, ~}]" column))
+	    (columns
+	     (list (sql-typed-array map)))
+	    (t (error "No mapped column(s) in slot ~a" (slot-definition-name slot)))))))
 
 
 (define-layered-function wherep (slot function)
 
   (:method
-      :in retrieve-node ((slot db-column-slot-definition) (slot-value-p function))
+      :in db-layer ((slot db-column-slot-definition) (slot-value-p function))
     (awhen (funcall slot-value-p slot)
       (with-slots (schema table column-name) slot
-	(format nil "~a = $~a" (set-sql-name schema table column-name) self)))))
+	(format nil "~a = $~a" (set-sql-name schema table column-name) self))))
+
+  (:method
+      :in db-layer ((slot db-aggregate-slot-definition) (slot-value-p function))
+    (with-aggregate-slot slot
+      (let* ((table (mapped-table map))
+	     (table-name (set-sql-name (schema table) (table table))))
+	(awhen (funcall slot-value-p slot)
+	  (cond (column
+		 (format nil "~a IN (SELECT UNNEST ($~a))" (set-sql-name table-name (column-name column)) self))
+		(columns
+		 (let ((column-names (mapcar #'column-name columns))
+		       (where (mapcar #'(lambda (column)
+					  (let ((col-name (column-name column)))
+					    (format nil "~a = ~a.~a" col-name table-name col-name)))
+				      columns)))
+		   (format nil "EXISTS (SELECT ~{~a~^, ~} FROM UNNEST ($~a) WHERE~{ ~a~^ AND~}"
+			   column-names self where)))
+		(t (error "No mapped column(s) in slot ~a" (slot-definition-name slot)))))))))
 
 
 
@@ -301,12 +355,15 @@
 			  (member ref-table tables :test #'eq))))
 		  :join-to last
 		  :join-type join-type
-		  :slot-value-p slot-value-p)
+		  :slot-value-p #'(lambda (slot)
+				    (unless (or (member table union-queries :test #'eq)
+						(member table union-all-queries :test #'eq))
+				      (funcall slot-value-p slot))))
 	       (setf (gethash table-class components) component
 		     return-columns (nconc return-columns return-columns%))
 	       (unless (eq join-type :left)
 		 (setf last (lambda (slot)
-			      (when (find-slot-definition (find-class table) slot)
+			      (when (find-slot-definition (find-class table) slot 'db-column-slot-definition)
 				(or (slot-value component 'alias)
 				    (set-sql-name schema table)))))))))
 
@@ -347,7 +404,6 @@
       union)))
 
 
-
 (define-layered-function union-select (table column-names function)
   (:method
       :in retrieve-node ((table db-table-class) (column-names cons) (slot-value-p function))
@@ -361,10 +417,9 @@
 				  column-names)
 		where (loop
 			for column in (filter-slots-by-type table 'db-column-slot-definition)
-			for arg-num = (funcall slot-value-p column)
-			when arg-num
-			  collect (list (db-syntax-prep (set-sql-name table-name (column-name column)))
-					:= (format nil "$~a" arg-num)))))
+			for slot = (nth-value 1 (funcall slot-value-p column))
+			when slot
+			  collect (wherep slot slot-value-p))))
 	(statement select)))))
 
 
@@ -396,10 +451,13 @@
 
 
 (define-layered-method generate-component
-  :in retrieve-node ((class slot-mapping) (f-key-p function) &key join-to (join-type :inner) slot-value-p)
+  :in retrieve-node
+  ((class slot-mapping) (f-key-p function)
+   &key join-to (join-type :inner) slot-value-p)
   (let* ((join (make-instance 'join :join-type join-type))
 	 (mapped-table (mapped-table class))
-	 (mapped-slot (mapped-column class))
+	 (mapped-column (mapped-column class))
+	 (mapped-columns (mapped-columns class))
 	 (mapping-slot% (mapping-slot class))
 	 (mapping-slot (db-syntax-prep (slot-definition-name mapping-slot%)))
 	 (schema (schema mapped-table))
@@ -407,25 +465,32 @@
 	 (table-name (set-sql-name schema (table mapped-table)))
 	 (f-keys)
 	 (columns (loop
+		    with collected-slots = nil
 		    for slot in slots
 		    for f-key = (slot-value slot 'foreign-key)
+		    for column = (cond ((eq slot mapped-column)
+					mapping-slot)
+				       ((member slot mapped-columns :test #'eq)
+					(unless (member mapping-slot collected-slots :test #'eq)
+					  (push mapping-slot collected-slots)
+					  mapping-slot))
+				       (t (column-name slot)))
 		    if (and f-key (funcall f-key-p f-key))
 		      do (push f-key f-keys)
 		    else
-		      collect (set-sql-name mapping-slot (if (eq slot mapped-slot)
-							     mapping-slot
-							     (column-name slot)))))
+		      when column
+			collect (set-sql-name mapping-slot column)))
 	 (last-key)
 	 (table-clause))
 
     ;; When values are bound to mapping slot in class mapping-node 
+    ;; and mapped-table is not invoked in a union subquery,
     ;; any retrieved records must validate against at least one of
-    ;; of the supplied values.
-    (awhen (funcall slot-value-p mapping-slot%)
+    ;; of the supplied values. 
+    (when (funcall slot-value-p mapping-slot%)
       (let ((group-by (mapcar #'(lambda (f-key)
 				  (set-sql-name table-name (slot-value f-key 'key)))
-			      f-keys))
-	    (col-name (set-sql-name table-name (slot-definition-name mapped-slot))))
+			      f-keys)))
 	(setf last-key (concatenate 'string (db-syntax-prep mapping-slot) "_key"))
 	(with-slots (table on) join
 	  (setf table (clause
@@ -433,27 +498,39 @@
 				      :alias last-key
 				      :from table-name
 				      :group-by group-by
-				      :where (format nil "~a IN (SELECT UNNEST ($~a))" col-name self)))
+				      :where (wherep mapping-slot% slot-value-p)))
 		on (loop
 		     for f-key in f-keys
 		     for key = (slot-value f-key 'key)
 		     for self = (funcall join-to key)
 		     when self
-		     collect `(,(set-sql-name self key)
-			       ,(set-sql-name last-key key)))
+		       collect `(,(set-sql-name self key)
+				 ,(set-sql-name last-key key)))
 		table-clause (clause join)))))
 
     (with-slots (table on) join
       (setf table 
 	    (clause
-	     (make-instance 'array-agg
-			    :alias mapping-slot
-			    :from table-name
-			    :col-names (ensure-list (set-sql-name table-name (slot-definition-name mapped-slot)))
-			    :group-by (mapcan #'(lambda (slot)
-						  (unless (eq slot mapped-slot)
-						    (list (set-sql-name table-name (column-name slot)))))
-					      slots)))
+	     (cond (mapped-column
+		    (make-instance 'array-agg
+				   :alias mapping-slot
+				   :from table-name
+				   :col-names (ensure-list (set-sql-name table-name (slot-definition-name mapped-column)))
+				   :group-by (mapcan #'(lambda (slot)
+							 (unless (eq slot mapped-column)
+							   (list (set-sql-name table-name (column-name slot)))))
+						     slots)))
+		   (mapped-columns
+		    (make-instance 'json-agg
+				   :alias mapping-slot
+				   :from table-name
+				   :col-names (mapcar #'(lambda (column)
+							  (set-sql-name table-name (column-name column)))
+						      mapped-columns)
+				   :group-by (mapcan #'(lambda (slot)
+							 (unless (member slot mapped-columns :test #'eq)
+							   (list (set-sql-name table-name (column-name slot)))))
+						     slots)))))
 	    on (loop
 		 for f-key in f-keys
 		 for key = (slot-value f-key 'key)
@@ -542,6 +619,13 @@
   (with-slots (col-names from group-by alias where) this
     (format nil "((SELECT ARRAY_AGG(~a) AS ~a, ~{~a~^, ~} FROM ~a~@[ WHERE ~{~a~^ AND~}~] GROUP BY ~{~a~^, ~})) ~a"
 	    col-names alias group-by from where group-by alias)))
+
+
+(define-layered-method clause
+  :in db-interface-layer ((this json-agg))
+  (with-slots (col-names from group-by alias where) this
+    (format nil "((SELECT JSON_AGG(JSON_BUILD_ARRAY(~{~a~^, ~})) AS ~a, ~{~a~^, ~} FROM ~{~a~^, ~}~@[ WHERE ~{~a~^ AND~}~] GROUP BY ~{~a~^, ~})) ~a"
+	    col-names alias group-by (ensure-list from) where group-by alias)))
 
 
 (define-layered-method statement

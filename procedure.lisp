@@ -56,18 +56,35 @@ according to class.")
 
   (:method
       :in db-layer ((class db-table-class))
-    (with-slots (schema table require-columns mapped-by) class
+    (wIth-slots (schema table require-columns) class
       (let ((table-name (set-sql-name schema (as-prefix table)))
-	    (control (if mapped-by
-			 "ARRAY[ ~~{ROW (~{~a~^, ~})~~^, ~~}]::~a_type[]"
-			 "ARRAY[ ROW (~{~a~^, ~})]::~a_type[]")))
+	    (control "ARRAY[ ROW (~{~a~^, ~})]::~a_type[]"))
 	(list 
 	 (format nil control
 		 (loop
 		   for slot in require-columns
-		     collect "~a")
+		   collect "~a")
 		 table-name)
-	 require-columns)))))
+	 require-columns))))
+
+  (:method
+      :in db-layer ((map slot-mapping))
+    (let ((class (mapped-table map)))
+      (wIth-slots (schema table) class
+	(let* ((table-name (set-sql-name schema (as-prefix table)))
+	       (column (ensure-list (slot-value map 'mapped-column)))
+	       (columns (slot-value map 'mapped-columns))
+	       (control (if column
+			    "ARRAY[ ~~{ROW (~{~a~^, ~})~~^, ~~}]::~a_type[]"
+			    "ARRAY[ ~~{ROW (~~{~{~a~^, ~}~~})~~^, ~~}]::~a_type[]"))
+	       (mapped-columns (or column columns)))
+	  (list 
+	   (format nil control
+		   (loop
+		     for slot in mapped-columns
+		     collect "~a")
+		   table-name)
+	   mapped-columns))))))
 
 
 ;;; generating a procedure for insert/delete ops
@@ -154,7 +171,7 @@ from an instance of serialize, with which to query a database.")
 			  for slot in (cadr control)
 			  for mapped-by = (match-mapping-node (class-of class) slot)
 			  if mapped-by
-			    collect (slot-value mapped-by 'mapping-slot)
+			    do (return (list (slot-value mapped-by 'mapping-slot)))
 			  else
 			    collect slot)
 			(aif (slot-value (cadr control) 'mapped-by)

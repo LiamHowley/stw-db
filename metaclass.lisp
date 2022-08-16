@@ -39,10 +39,12 @@
     :reader maps)
    (express-as-type
     :initarg :express-as-type
-    :initform nil
+    :initform :alist
     :type (or null symbol)
     :documentation "Set requested type for SELECT operations to return. Unless otherwise specified, the type
-set in maps-table will be returned.")
+set in maps-table will be returned. If multiple columns are mapped the return values will be contained in a 
+list and the value EXPRESS-AS-TYPE will apply to the column => value pair. If a single column is mapped the
+value EXPRESS-AS-TYPE will refer to the values container.")
    (constraint
     :initarg :constraint
     :initform nil
@@ -122,14 +124,14 @@ with a single column of type serial."))
   (mapping-node nil :type (or null db-interface-class))
   (mapping-slot nil :type db-aggregate-slot-definition)
   (mapped-table nil :type db-table-class)
-  (mapped-column nil :type db-column-slot-definition)
+  (mapped-column nil :type (or null db-column-slot-definition))
   (mapped-columns () :type list))
 
 
 (define-layered-method initialize-in-context
   :in db-interface-layer ((slot db-aggregate-slot-definition) 
 			  &key maps-table maps-column maps-columns)
-  (with-slots (maps express-as-type) slot
+  (with-slots (maps) slot
     (when maps-table
       (unless (find-class maps-table)
 	(error "the table ~a specified in maps-table does not exist" maps-table))
@@ -140,9 +142,7 @@ with a single column of type serial."))
 		  :mapped-table (find-class maps-table)
 		  :mapped-column (find-slot-definition maps-table maps-column 'db-column-slot-definition)
 		  :mapped-columns (loop for column in maps-columns
-					collect (find-slot-definition maps-table column 'db-column-slot-definition))))
-      (unless express-as-type
-	(setf (slot-value slot 'express-as-type) maps-table)))))
+					collect (find-slot-definition maps-table column 'db-column-slot-definition)))))))
 
 
 (define-layered-class foreign-key
@@ -264,7 +264,8 @@ with a single column of type serial."))
 		 (pushnew (class-name mapped-table) tables :test #'eq)
 		 (collate-keys mapped-table)
 		 (pushnew maps (slot-value class 'maps) :test #'eq)
-		 (pushnew maps (slot-value mapped-column 'mapped-by) :test #'eq)
+		 (when mapped-column
+		   (pushnew maps (slot-value mapped-column 'mapped-by) :test #'eq))
 		 (pushnew maps (slot-value mapped-table 'mapped-by) :test #'eq)
 		 (loop
 		   for column in mapped-columns

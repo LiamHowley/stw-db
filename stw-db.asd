@@ -21,10 +21,10 @@
 		 (:file "procedure")
 		 (:file "function")
 		 (:file "dispatch")
+		 (:file "select")
 		 (:file "insert")
 		 (:file "delete")
-		 (:file "update")
-		 (:file "select"))
+		 (:file "update"))
     :long-description
     #.(uiop:read-file-string
        (uiop:subpathname *load-pathname* "README.md"))

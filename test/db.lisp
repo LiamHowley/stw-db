@@ -67,8 +67,8 @@
 		     :on-update :cascade))))
 
 
-(define-interface-node user (user-base user-id user-email)
-  ())
+(define-interface-node user (user-base user-id)
+  ((emails :maps-table user-email :maps-column email :type list)))
 
 
 (define-db-table user-name ()
@@ -93,7 +93,9 @@
 		     :on-update :cascade))
    (site :primary-key t
 	 :not-null t
-	 :col-type :text)))
+	 :col-type :text)
+   (ip :not-null t
+       :col-type :text)))
 
 
 (define-db-table user-handle ()
@@ -148,7 +150,7 @@
 
 (define-interface-node account
   (user user-account user-name user-handle user-url)
-  ((sites :maps-table user-site :maps-column site :type list)))
+  ((sites :maps-table user-site :maps-columns (site ip) :express-as-type :alist :type list)))
 
 
 (define-db-table current-user ()
@@ -223,25 +225,25 @@
   :parent stw-db
   (with-active-layers (insert-node)
 
-    (let ((*account* (make-instance 'account :name "liam" :email "foo@bar.com"
+    (let ((*account* (make-instance 'account :name "liam" :emails '("foo@bar.com")
 					     :password "asdfasdf" :url "foobar.com"
 					     :created-by 1 :validated t)))
       (is equal
 	`(user-base user-url user-name user-account user-id user-email)
 	  (with-active-layers (insert-node)
 	    (stw.db::include-tables *account*)))
-      (true (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-email) 'email)))
-      (false (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-handle) 'handle)))
+      (true (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-email) 'email 'db-column-slot-definition)))
+      (false (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-handle) 'handle 'db-column-slot-definition)))
 
       (setf (slot-value *account* 'handle) "foo"
-	    (slot-value *account* 'email) nil)
+	    (slot-value *account* 'emails) nil)
 
       (is equal
 	  `(user-base user-url user-handle user-name user-account user-id)
 	  (with-active-layers (insert-node)
 	    (stw.db::include-tables *account*)))
-      (false (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-email) 'email)))
-      (true (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-handle) 'handle))))))
+      (false (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-email) 'email 'db-column-slot-definition)))
+      (true (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-handle) 'handle 'db-column-slot-definition))))))
 
 
 (define-test keyword...
@@ -259,7 +261,7 @@
 
 (define-test mapping...
   :parent stw-db
-  (let ((*account* (make-instance 'account :name "liam" :email "foo@bar.com"
+  (let ((*account* (make-instance 'account :name "liam" :emails "foo@bar.com"
 					   :password "asdfasdf" :url "foobar.com"
 					   :created-by 1 :validated t)))
     (with-active-layers (db-layer)
@@ -272,13 +274,13 @@
   :parent stw-db 
   :depends-on (table-order...)
 
-  (let ((*account* (make-instance 'account :name "liam" :email "foo@bar.com"
+  (let ((*account* (make-instance 'account :name "liam" :emails '("foo@bar.com")
 					   :password "asdfasdf" :url "foobar.com"
 					   :created-by 1 :validated t))
-	(*user* (make-instance 'user :email "liam@foobar.com")))
+	(*user* (make-instance 'user :emails '("liam@foobar.com"))))
 
     (setf (slot-value *account* 'handle) "foo"
-	  (slot-value *account* 'email) nil)
+	  (slot-value *account* 'emails) nil)
 
     (with-active-layers (db-interface-layer)
 
@@ -299,12 +301,12 @@
 	      '((:OUT "_id" :INTEGER) (:OUT "_user_id" :INTEGER)
 		(:IN "stw_test_schema.user_email_type[]"))
 	      (slot-value procedure 'stw.db::args))
-	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[ ROW (~a)]::stw_test_schema.user_email_type[])"
+	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_email_type[])"
 	      (slot-value procedure 'stw.db::p-control))
 	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[ ROW (E'liam@foobar.com')]::stw_test_schema.user_email_type[])"
 	      (dispatch-statement *user* procedure))))
 
-      (setf (slot-value *account* 'email) "foo@bar.com")
+      (setf (slot-value *account* 'emails) '("foo@bar.com"))
 
       (let ((format-components (stw.db::sql-typed-array (find-class 'user-email))))
 	(is string= "ARRAY[ ROW (~a)]::stw_test_schema.user_email_type[]" (car format-components))
@@ -313,54 +315,56 @@
 
       (with-active-layers (update-node)
 	(let ((clone (clone-object *account*)))
-	  (setf (slot-value clone 'email) "bar@foo.com")
-	  (fail (stw.db::match-primary-keys *account* clone) 'null-key-error "Null value for key ID in class ACCOUNT.")
+	  (setf (slot-value clone 'emails) '("bar@foo.com"))
+	  (fail (stw.db::match-root-keys *account* clone) 'null-key-error "Null value for key ID in class ACCOUNT.")
 	  (setf (slot-value *account* 'id) 1
 		(slot-value clone 'id) 2)
-	  (fail (stw.db::match-primary-keys *account* clone) 'update-key-value-error "Expected value: 1. Received value: 2.")
+	  (fail (stw.db::match-root-keys *account* clone) 'update-key-value-error "Expected value: 1. Received value: 2.")
 	  (setf (slot-value clone 'id) 1)
 	  (let ((procedure (generate-procedure *account* clone)))
 	    (of-type stw.db::procedure procedure)
 	    (is equal
-		'((:INOUT "set_email" "stw_test_schema.user_email_email")
-		  ("stw_test_schema.user_email_email")
-		  ("stw_test_schema.user_email_id"))
+		'(("stw_test_schema.user_email_id") (:inout "delete_emails" "stw_test_schema.user_email_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw_test_schema.account_update (~a::stw_test_schema.user_email_email, ~a::stw_test_schema.user_email_email, ~a::stw_test_schema.user_email_id)"
+		"CALL stw_test_schema.account_update (~a, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_email_type[])"
 		(slot-value procedure 'stw.db::p-control))
 	    (is string=
-		"CALL stw_test_schema.account_update (E'bar@foo.com'::stw_test_schema.user_email_email, E'foo@bar.com'::stw_test_schema.user_email_email, 1::stw_test_schema.user_email_id)"
+		"CALL stw_test_schema.account_update (1, ARRAY[ ROW (E'foo@bar.com')]::stw_test_schema.user_email_type[])"
 		(update-op-dispatch-statement *account* clone procedure)))))
       
-      (let ((format-components (stw.db::sql-typed-array (find-class 'user-site))))
-	(is string= "ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_site_type[]" (car format-components))
+      (let* ((map (stw.db::match-mapping-node (find-class 'account) (find-class 'user-site)))
+	     (format-components (stw.db::sql-typed-array map)))
+	(of-type stw.db::slot-mapping map)
+	(is string= "ARRAY[ ~{ROW (~{~a, ~a~})~^, ~}]::stw_test_schema.user_site_type[]" (car format-components))
 
 	(with-active-layers (insert-table)
-	  (setf (slot-value *account* 'sites) '("foo.com" "bar.com" "baz.com"))
+	  (setf (slot-value *account* 'sites) `(((site . "foo.com") (ip . "123.345.234.1"))
+						((site . "bar.com") (ip . "234.987.1.1"))
+						((site . "baz.com") (ip . "234.234.234.2"))))
 	  (let ((procedure (generate-procedure *account* (find-class 'user-site))))
 	    (of-type stw.db::procedure procedure)
 	    (is string=
-		"CALL stw_test_schema.user_site_insert (~a, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_insert (~a, ARRAY[ ~{ROW (~{~a, ~a~})~^, ~}]::stw_test_schema.user_site_type[])"
 		(slot-value procedure 'stw.db::p-control))
 	    (is equal
 		'(("stw_test_schema.user_site_id") (:inout "insert_sites" "stw_test_schema.user_site_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw_test_schema.user_site_insert (1, ARRAY[ ROW (E'foo.com'), ROW (E'bar.com'), ROW (E'baz.com')]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_insert (1, ARRAY[ ROW (E'foo.com', E'123.345.234.1'), ROW (E'bar.com', E'234.987.1.1'), ROW (E'baz.com', E'234.234.234.2')]::stw_test_schema.user_site_type[])"
 		(dispatch-statement *account* procedure))))
 	
 	(with-active-layers (delete-table)
 	  (let ((procedure (generate-procedure *account* (find-class 'user-site))))
 	    (of-type stw.db::procedure procedure)
 	    (is string=
-		"CALL stw_test_schema.user_site_delete (~a, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_delete (~a, ARRAY[ ~{ROW (~{~a, ~a~})~^, ~}]::stw_test_schema.user_site_type[])"
 		(slot-value procedure 'stw.db::p-control))
 	    (is equal
 		'(("stw_test_schema.user_site_id") (:INOUT "delete_sites" "stw_test_schema.user_site_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw_test_schema.user_site_delete (1, ARRAY[ ROW (E'foo.com'), ROW (E'bar.com'), ROW (E'baz.com')]::stw_test_schema.user_site_type[])"
+		"CALL stw_test_schema.user_site_delete (1, ARRAY[ ROW (E'foo.com', E'123.345.234.1'), ROW (E'bar.com', E'234.987.1.1'), ROW (E'baz.com', E'234.234.234.2')]::stw_test_schema.user_site_type[])"
 		(dispatch-statement *account* procedure))))))))
 
 
@@ -368,42 +372,41 @@
 (define-test retrieving...
   :parent stw-db
   (with-active-layers (retrieve-node)
-    (let* ((*user* (make-instance 'user :email "liam@foobar.com"))
+    (let* ((*user* (make-instance 'user :emails '("liam@foobar.com")))
 	   (function (generate-procedure *user* nil)))
       (of-type 'stw.db::db-function function)
       (is equal
-	  '((:IN "_email" "stw_test_schema.user_email_email"))
+	  '((:IN "_emails" "TEXT[]"))
 	  (slot-value function 'stw.db::args))
       (is string=
-	  "user_retrieve_b0f3692a_5de7_38cc_8a03_744f798522ad"
+	  "user_retrieve_df014172_2ec1_39a0_b186_c8d9bf345627"
 	  (slot-value function 'stw.db::name))
       (is string=
-	  "SELECT * FROM stw_test_schema.user_retrieve_b0f3692a_5de7_38cc_8a03_744f798522ad (~a::stw_test_schema.user_email_email)"
+	  "SELECT * FROM stw_test_schema.user_retrieve_df014172_2ec1_39a0_b186_c8d9bf345627 (ARRAY[~{~a~^, ~}])"
 	  (slot-value function 'stw.db::p-control))
       (is string=
-	  "SELECT stw_test_schema.user_base.id, stw_test_schema.user_id.user_id, stw_test_schema.user_email.email FROM stw_test_schema.user_base INNER JOIN stw_test_schema.user_id ON (stw_test_schema.user_base.id = stw_test_schema.user_id.id) INNER JOIN stw_test_schema.user_email ON (stw_test_schema.user_id.id = stw_test_schema.user_email.id AND stw_test_schema.user_id.user_id = stw_test_schema.user_email.user_id) WHERE stw_test_schema.user_email.email = $1;"
+	  "SELECT stw_test_schema.user_base.id, stw_test_schema.user_id.user_id, emails.emails FROM stw_test_schema.user_base INNER JOIN stw_test_schema.user_id ON (stw_test_schema.user_base.id = stw_test_schema.user_id.id) INNER JOIN ((SELECT stw_test_schema.user_email.id, stw_test_schema.user_email.user_id FROM stw_test_schema.user_email WHERE stw_test_schema.user_email.email IN (SELECT UNNEST ($1)) GROUP BY stw_test_schema.user_email.id, stw_test_schema.user_email.user_id)) emails_key ON (stw_test_schema.user_id.id = emails_key.id AND stw_test_schema.user_id.user_id = emails_key.user_id) INNER JOIN ((SELECT ARRAY_AGG((stw_test_schema.user_email.email)) AS emails, stw_test_schema.user_email.user_id, stw_test_schema.user_email.id FROM stw_test_schema.user_email GROUP BY stw_test_schema.user_email.user_id, stw_test_schema.user_email.id)) emails ON (emails_key.id = emails.id AND emails_key.user_id = emails.user_id);"
 	  (slot-value function 'stw.db::sql-query)))))
 
 (define-test sql-express...
   :parent stw-db
   
-  (let ((*user* (make-instance 'user :email "liam@foobar.com")))
+  (let ((*user* (make-instance 'user :emails '("liam@foobar.com"))))
     (with-active-layers (insert-node)
       (let ((procedure (generate-procedure *user* nil)))
 	(is equal
 	    '("INSERT INTO stw_test_schema.user_base DEFAULT VALUES RETURNING user_base.id INTO _user_base_id;"
 	      "INSERT INTO stw_test_schema.user_id (id) VALUES (_user_base_id) RETURNING user_id.user_id INTO _user_id_user_id;"
-	      "INSERT INTO stw_test_schema.user_email (user_id, id, email) SELECT _user_id_user_id, _user_base_id, email FROM UNNEST ($3);"
-	      "_user_id := _user_id_user_id;" "_id := _user_base_id;")
+	      "INSERT INTO stw_test_schema.user_email (user_id, id, email) SELECT _user_id_user_id, _user_base_id, email FROM UNNEST ($3);" "_user_id := _user_id_user_id;" "_id := _user_base_id;")
 	    (slot-value procedure 'stw.db::sql-list))))
 
     (with-active-layers (update-node)
       (setf (slot-value *user* 'id) 1)
       (let ((clone (clone-object *user*)))
-	(setf (slot-value *user* 'email) "liam@foobaz.com")
+	(setf (slot-value *user* 'emails) '("liam@foobaz.com"))
 	(let ((procedure (generate-procedure *user* clone)))
 	  (is equal
-	      '("UPDATE stw_test_schema.user_email SET email = $1 WHERE email = $2 AND id = $3;" "RETURN;")
+	      '("DELETE FROM stw_test_schema.user_email WHERE id = $1 AND email IN (SELECT email FROM UNNEST ($2));" "RETURN;")
 	      (slot-value procedure 'stw.db::sql-list)))))
 
     (with-active-layers (delete-node)

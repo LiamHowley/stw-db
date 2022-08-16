@@ -102,12 +102,13 @@ and not null. Returns a boolean.")
 		    (eq col-type :serial)
 		    (slot-boundp slot 'default))
 		t))
-	  (awhen (slot-value slot 'mapped-by)
-	    (loop
-	      for mapping in self
-		thereis (let ((slot-name (slot-definition-name (mapping-slot mapping))))
-			  (and (eq (mapping-node mapping) (class-of class))
-			       (slot-value class slot-name)))))))))
+	  (awhen (match-mapping-node (class-of class) slot)
+	    (slot-to-go class (mapping-slot self))))))
+
+  (:method
+      :in db-layer ((class serialize) (slot db-aggregate-slot-definition))
+    (let ((slot-name (slot-definition-name slot)))
+      (slot-value class slot-name))))
 
 
 
@@ -129,14 +130,16 @@ and not null. Returns a boolean.")
 	 (components (make-hash-table :test #'eq :size (length tables))))
     (loop
       for table in tables
-      do (multiple-value-bind (table-class component)
-	     (generate-component (find-class table)
-				 #'(lambda (f-key)
-				     (with-slots (ref-table no-join) f-key
-				       (unless no-join
-					 (member ref-table tables :test #'eq)))))
-	   (when component
-	     (setf (gethash table-class components) component))))
+      for table-class% = (find-class table)
+      for map = (match-mapping-node class table-class%)
+	do (multiple-value-bind (table-class component)
+	       (generate-component (if map map table-class%)
+				   #'(lambda (f-key)
+				       (with-slots (ref-table no-join) f-key
+					 (unless no-join
+					   (member ref-table tables :test #'eq)))))
+	     (when component
+	       (setf (gethash table-class components) component))))
     components))
 
 
@@ -242,17 +245,56 @@ and not null. Returns a boolean.")
 
 
 (define-layered-method generate-component
+  :in-layer insert-node ((map slot-mapping) (f-key-p function) &key)
+  (let ((table-class (mapped-table map)))
+    (with-slots (schema table) table-class
+      (let ((require-columns (or (slot-value map 'mapped-columns)
+				 (ensure-list (slot-value map 'mapped-column)))))
+	(loop
+	  for slot in (filter-slots-by-type table-class 'db-column-slot-definition)
+	  for column-name = (slot-value slot 'column-name)
+	  for domain = (slot-value slot 'domain)
+	  for f-key = (slot-value slot 'foreign-key)
+	  when (member slot require-columns :test #'equality)
+	    collect column-name into required-vars
+	    and collect column-name into required-columns
+	  when (and f-key (funcall f-key-p f-key))
+	    collect (with-slots (key column) f-key
+		      (format nil "_~a_~a"
+			      (db-syntax-prep (slot-value f-key 'table))
+			      (db-syntax-prep column)))
+	      into referenced-vars
+	  and collect column-name into referenced-columns
+	  finally (return
+		    (values (class-name table-class)
+			    (make-component
+			     :sql (format nil
+					  "INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} FROM UNNEST ($~~a);"
+					  (set-sql-name schema table)
+					  `(,@referenced-columns ,@required-columns)
+					  `(,@referenced-vars ,@required-vars))
+			     :params `((:in ,(format nil "~a.~a_type[]" schema table)))
+			     :param-controls (list (sql-typed-array map))))))))))
+
+
+(define-layered-method generate-component
   :in-layer insert-table ((map slot-mapping) (slot-to-go-p function) &key)
   (let ((table-class (mapped-table map))
 	(typed-array-name (format nil "insert_~(~a~)" (slot-definition-name (mapping-slot map)))))
-    (with-slots (schema table require-columns) table-class
-      (let ((type-array (format nil "~a.~a_type[]" schema table)))
+    (with-slots (schema table) table-class
+      (let ((type-array (format nil "~a.~a_type[]" schema table))
+	    (require-columns (or (slot-value map 'mapped-columns)
+				 (ensure-list (slot-value map 'mapped-column)))))
 	(loop
 	  for slot in (filter-slots-by-type table-class 'db-column-slot-definition)
 	  for column-name = (slot-value slot 'column-name)
 	  for domain = (slot-value slot 'domain)
 	  unless (funcall slot-to-go-p slot)
 	    do (return)
+	  unless (slot-value slot 'primary-key)
+	    if (member slot (slot-value table-class 'require-columns) :test #'eq)
+	      collect column-name into set-columns
+	      and collect (concatenate 'string "EXCLUDED." column-name) into set
 	  if (member slot require-columns :test #'equality)
 	    collect column-name into required-columns
 	  else
@@ -263,12 +305,15 @@ and not null. Returns a boolean.")
 	  finally (return
 		    (make-component
 		     :sql (format nil
-				  "INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} from unnest($~~a);"
+				  "INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} FROM UNNEST($~~a)~@[ ~a~];"
 				  (set-sql-name schema table)
 				  columns
-				  required-columns)
+				  required-columns
+				  (when set-columns
+				    (format nil "ON CONFLICT ON CONSTRAINT ~a DO UPDATE SET (~{~a~^, ~}) = ROW (~{~a~^, ~})"
+					    (format nil "~a_pkey" table) set-columns set)))
 		     :params `(,@args (:inout ,typed-array-name ,type-array))
-		     :param-controls `(,@p-controls ,(sql-typed-array table-class)))))))))
+		     :param-controls `(,@p-controls ,(sql-typed-array map)))))))))
 
 
 

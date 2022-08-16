@@ -21,11 +21,11 @@
 
   ;; Primary keys of the primary
   ;; table in tables must match.
-  (or (match-primary-keys old new)
+  (or (match-root-keys old new)
       (call-next-method)))
 
 
-(define-layered-function match-primary-keys (old new)
+(define-layered-function match-root-keys (old new)
   (:documentation "Selects the primary keys of the first table in tables 
 and matches the values of each primary key in both old and new. A nil value
 or primary keys not matching will invoke an error.")
@@ -60,7 +60,6 @@ or primary keys not matching will invoke an error.")
 		    nil)))))))
 
 
-
 (define-layered-method read-row-to-class 
   :in-layer update-node ((class serialize))
   (flet ((process-fields (field next-field)
@@ -69,42 +68,55 @@ or primary keys not matching will invoke an error.")
 		  (amended (substitute #\- #\_ field))
 		  (symbol-name (string-upcase (or (when pos (subseq amended (1+ pos)))
 						  amended)))
-		  (slot-name (intern symbol-name (symbol-package (class-name base-class)))))
+		  (slot-name (intern symbol-name (symbol-package (class-name base-class))))
+		  (slot (find-slot-definition base-class slot-name 'db-base-column-definition)))
 	     (scase (subseq field 0 pos)
 		    ("insert"
-		     (awhen (find-slot-definition base-class slot-name 'db-aggregate-slot-definition)
-		       (let ((list (explode-string next-field
-						   '("{\"(\\\"" "\\\")\",(" "\\\")" "{(" "),(" ")(" ")}" "),\"(\\\"" "\\\")\"}")
-						   :remove-separators t)))
+		     (when (and slot (typep slot 'db-aggregate-slot-definition))
+			  (with-aggregate-slot slot
+			      (let ((list 
+				      (cond (column
+					     (explode-string next-field
+							     '("{\"(\\\"" "\\\")\",(" "\\\")" "{(" "),(" ")(" ")}" "),\"(\\\"" "\\\")\"}")
+							     :remove-separators t))
+					    (columns
+					     (let ((xtype (slot-value slot 'express-as-type)))
+					       (parse-op-result columns xtype next-field))))))
 			 (loop
 			   for value in list
-			   do (case (slot-definition-type self)
+			   do (case (slot-definition-type slot)
 				(array
 				 (vector-push-extend value (slot-value class slot-name)))
 				(t
-				 (push value (slot-value class slot-name))))))))
+				 (push value (slot-value class slot-name)))))))))
 		    ("delete"
-		     (awhen (find-slot-definition base-class slot-name 'db-base-column-definition)
-		       (etypecase self
+		     (when slot
+		       (etypecase slot
 			 (db-aggregate-slot-definition
-			  (let ((list (explode-string next-field
-						      '("{\"(\\\"" "\\\")\",(" "\\\")" "{(" "),(" ")(" ")}" "),\"(\\\"" "\\\")\"}")
-						      :remove-separators t)))
-			    (loop
-			      for value in list
-			      do (setf (slot-value class slot-name)
-				       (remove value (slot-value class slot-name) :test #'equal)))))
+			  (with-aggregate-slot slot
+			      (let ((list 
+				      (cond (column
+					     (explode-string next-field
+							     '("{\"(\\\"" "\\\")\",(" "\\\")" "{(" "),(" ")(" ")}" "),\"(\\\"" "\\\")\"}")
+							     :remove-separators t))
+					    (columns
+					     (let ((xtype (slot-value slot 'express-as-type)))
+					       (parse-op-result columns xtype next-field))))))
+				(loop
+				  for value in list
+				  do (setf (slot-value class slot-name)
+					   (remove value (slot-value class slot-name) :test #'equal))))))
 			 (db-column-slot-definition
 			  (when (equal next-field (slot-value class slot-name))
 			    (setf (slot-value class slot-name) nil))))))
 		    (t
-		     (awhen (find-slot-definition base-class slot-name 'db-column-slot-definition)
+		     (when (and slot (typep slot 'db-column-slot-definition))
 		       (setf (slot-value class slot-name)
 			     (cond ((stringp next-field)
 				    (string-trim '(#\") next-field))
 				   ((and (eq next-field :null)
-					 (or (null (slot-value self 'not-null))
-					     (eq (col-type self) :boolean)))
+					 (or (null (slot-value slot 'not-null))
+					     (eq (col-type slot) :boolean)))
 				    nil)
 				   ((eq next-field :null)
 				    (slot-makunbound class slot-name))
@@ -116,6 +128,45 @@ or primary keys not matching will invoke an error.")
 	     for field across fields
 	     do (process-fields (field-name field) (next-field field)))
 	finally (return class)))))
+
+
+(define-layered-function parse-op-result (column type result)
+
+  (:method
+      :in update-node ((columns cons) (type (eql :alist)) result)
+    (let ((rows (explode-string result '("{\"(" ")\",\"(" ")\"}")
+				:remove-separators t)))
+      (loop
+	for row in rows
+	for row-list = (explode-string row #\, :remove-separators t)
+	when row-list
+	  collect (loop
+		    for item in row-list
+		    for column in columns
+		    collect (cons (slot-definition-name column) item)))))
+
+  (:method
+      :in update-node ((columns cons) (type (eql :list)) result)
+    (let ((rows (explode-string result '("{\"(" ")\",\"(" ")\"}")
+				:remove-separators t)))
+      (loop
+	for row in rows
+	for row-list = (explode-string row #\, :remove-separators t)
+	when row-list
+	  collect row-list)))
+
+  (:method
+      :in update-node ((columns cons) (type (eql :array)) result)
+    (let ((rows% (explode-string result '("{\"(" ")\",\"(" ")\"}")
+				 :remove-separators t))
+	  (rows (loop
+		  for row in rows%
+		  for row-list = (explode-string row #\, :remove-separators t)
+		  when row-list
+		    collect row-list)))
+      (when rows
+	(make-array (list (length rows)(length (car rows)))
+		    :initial-contents rows)))))
 
 
 
@@ -308,20 +359,22 @@ db-aggregate-slot-definition.")
     (loop
       for slot in (filter-slots-by-type (class-of old) 'db-aggregate-slot-definition)
       for slot-name = (slot-definition-name slot)
-      for old-values = (slot-value old slot-name)
-      for new-values = (slot-value new slot-name)
+      for map = (slot-value slot 'maps)
+      for mapped-table = (mapped-table map)
+      for old-values = (array-to-list (slot-value old slot-name))
+      for new-values = (array-to-list (slot-value new slot-name))
       for to-delete = (set-difference old-values new-values :test #'equal)
       for to-insert = (set-difference new-values old-values :test #'equal)
-      for maps = (slot-value slot 'maps)
-      for mapped-table = (mapped-table maps)
       for insertion = (when to-insert
 			(with-active-layers (insert-table)
-			  (generate-component maps (lambda (slot%)
-						     (slot-to-go new slot%)))))
+			  (generate-component map
+					      (lambda (slot%)
+						(slot-to-go new slot%)))))
       for deletion = (when to-delete
 		       (with-active-layers (delete-table)
-			 (generate-component maps (lambda (slot%)
-						    (slot-to-go old slot%)))))
+			 (generate-component map
+					     (lambda (slot%)
+					       (slot-to-go old slot%)))))
       when insertion
 	collect :insert into components%
 	and collect insertion into components%
@@ -330,6 +383,8 @@ db-aggregate-slot-definition.")
 	and collect deletion into components%
       finally (when (or to-insert to-delete)
 		(return (values mapped-table components%))))))
+
+
 
 
 (define-layered-function update-op-dispatch-statement (old new procedure)
@@ -345,17 +400,25 @@ it's clone (new serialize). Applies only to update-node context.")
 	       for (symbol slot) in relevant-slots
 	       for mapped = (match-mapping-node (class-of old) slot)
 	       if mapped
-		 collect (let* ((slot-name (slot-definition-name (mapping-slot mapped)))
-				(old-values (slot-value old slot-name))
-				(new-values (slot-value new slot-name))
-				(column (mapped-column mapped)))
-			   (if (eq symbol :insert)
-			       (loop
-				 for value in (set-difference new-values old-values :test #'equal)
-				 collect (prepare-value% column value))
-			       (loop
-				 for value in (set-difference old-values new-values :test #'equal)
-				 collect (prepare-value% column value))))
+		 collect (let ((slot-name (slot-definition-name (mapping-slot mapped)))
+			       (column (mapped-column mapped))
+			       (columns (mapped-columns mapped))
+			       (mapping-slot (mapping-slot mapped)))
+			   (let ((old-values (array-to-list (slot-value old slot-name)))
+				 (new-values (array-to-list (slot-value new slot-name))))
+			     (flet ((mapped-values (values)
+				      (loop
+					for value in values
+					if column
+					  collect (prepare-value% column value)
+					else
+					  if columns
+					    collect (prep-mapped-value columns
+								       (slot-value mapping-slot 'express-as-type)
+								       value))))
+			     (if (eq symbol :insert)
+				 (mapped-values (set-difference new-values old-values :test #'equal))
+				 (mapped-values (set-difference old-values new-values :test #'equal))))))
 	       else 
 		 collect (prepare-value% slot
 					 (slot-value (if (or (eq symbol :old)

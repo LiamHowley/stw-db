@@ -1,5 +1,14 @@
 (in-package stw.db)
 
+
+(defmacro with-aggregate-slot (slot &body body)
+  `(when (typep ,slot 'db-aggregate-slot-definition)
+     (let* ((map (slot-value ,slot 'maps))
+	    (column (mapped-column map))
+	    (columns (mapped-columns map)))
+       ,@body)))
+
+
 (define-layered-function (setf proc-template) (new-value class component &rest rest &key &allow-other-keys)
   (:documentation "Cache procedure in hash-table. Hash table is context dependent and derived from
 calling db-template-register.")
@@ -24,7 +33,6 @@ calling db-template-register.")
   (:method
       :in-layer db-op ((class serialize) component &rest rest &key &allow-other-keys)
     (gethash (apply #'get-key class component rest) (db-template-register))))
-
 
 
 (define-layered-function get-key (class component &rest rest &key &allow-other-keys)
@@ -70,18 +78,17 @@ and the control string p-control. Values are obtained from serialize.")
     (with-slots (p-control relevant-slots) procedure
       (apply #'format nil p-control
 	     (nreverse
-	      (labels ((walk (inner &optional acc escape)
+	      (labels ((walk (inner &optional acc)
 			 (cond ((null inner)
 				acc)
 			       ((atom inner)
 				(let* ((slot-name (slot-definition-name inner))
-				       (value ;;(and (slot-boundp class slot-name)
-						   (slot-value class slot-name));;)
+				       (value (slot-value class slot-name))
 				       (result (prepare-value% inner value)))
 				  (cond (result
 					 (cons result acc))
 					(t acc))))
-			       (t (walk (cdr inner) (walk (car inner) acc (escape inner)))))))
+			       (t (walk (cdr inner) (walk (car inner) acc))))))
 		(walk relevant-slots)))))))
 
 
@@ -116,14 +123,45 @@ to class(es).")
 		 do (let ((next-field (next-field field)))
 		      (unless (eq next-field :null)
 			(awhen (find-slot-definition base-class slot-name 'db-base-column-definition)
-			  (setf (slot-value node slot-name)
-				(let ((slot-type (slot-definition-type self)))
-				  (cond ((or (eq slot-type 'list)
-					     (eq slot-type 'cons))
-					 (array-to-list next-field))
-					(t next-field))))))))
+			  (etypecase self
+			    (db-column-slot-definition
+			     (setf (slot-value node slot-name) next-field))
+			    (db-aggregate-slot-definition
+			     (with-aggregate-slot self
+			       (cond (column
+				      (let ((slot-type (slot-definition-type self)))
+					(setf (slot-value node slot-name)
+					      (if (or (eq slot-type 'list)
+						      (eq slot-type 'cons))
+						  (array-to-list next-field)
+						  next-field))))
+				     (columns
+				      (let ((xtype (slot-value self 'express-as-type)))
+					(setf (slot-value node slot-name)
+					      (parse-json-result columns xtype next-field))))))))))))
 	    collect node into nodes
 	    finally (return (if (eql i 0) node nodes))))))))
+
+
+(define-layered-function parse-json-result (columns type result)
+  (:method
+      :in db-layer ((columns cons) (type (eql :alist)) result)
+    (let ((list (json-array-to-list result)))
+      (loop
+	for row in list
+	collect (loop
+		  for result in row
+		  for column in columns
+		  for slot-name = (slot-definition-name column)
+		  when (and slot-name result)
+		    collect (cons slot-name result))))))
+
+
+(defun json-array-to-list (array)
+  (loop
+    for row in (explode-string array '("[[" "]]" "], [") :remove-separators t)
+    collect (explode-string row '(", " #\") :remove-separators t)))
+    
 
 
 (define-layered-function db-error-handler (err class component procedure)
@@ -246,7 +284,9 @@ relevant instance of SLOT-MAPPING.")
     :in-layer db-layer ((class db-interface-class) table/slot)
     (loop
       for mapping in (slot-value table/slot 'mapped-by)
-      when (eq (mapping-node mapping) class)
+      for mapping-node = (mapping-node mapping)
+      when (or (eq mapping-node class)
+	       (find-class-precedent mapping-node (class-name class) 'db-interface-class))
 	do (return mapping))))
 
 
@@ -264,15 +304,47 @@ relevant instance of SLOT-MAPPING.")
 		((:text :varchar :char)
 		 :text)
 		(t col-type)))
-      (prepare-value slot col-type value))))
+	(prepare-value slot col-type value))))
 
   (:method
       :in db-layer ((slot db-aggregate-slot-definition) values)
-    (with-slots (maps) slot
-      (loop
-	with column = (mapped-column maps)
-	for value in values
-	collect (prepare-value% column value)))))
+    (with-aggregate-slot slot
+      (with-slots (express-as-type) slot
+	(map 'list #'(lambda (value)
+		       (cond (column
+			      (prepare-value% column value))
+			     (columns
+			      (prep-mapped-value columns express-as-type value))
+			     (t (error "Mapped column(s) missing from aggregate slot ~a" (slot-definition-name slot)))))
+	     values)))))
+	 
+
+(define-layered-function prep-mapped-value (columns as-type values)
+  (:documentation "Finds values associated with columns, formats the values
+for database queries and returns the values in a list.")
+
+  (:method
+      :in db-layer ((columns cons) (as-type (eql :alist)) values)
+    "Column name mapped to value '((<name> . <value>))"
+    (loop
+      for column in columns
+      for col-name = (slot-definition-name column)
+      for result = (assoc col-name values :test #'eq)
+      when result
+	collect (prepare-value% column (cdr result))))
+
+  (:method
+      :in db-layer ((columns cons) (as-type (eql :list)) values)
+    "List of values associated with columns."
+    (loop
+      for column in columns
+      for value in values
+      collect (prepare-value% column value)))
+
+  (:method
+      :in db-layer ((columns cons) (as-type (eql :array)) values)
+    "Array of values associated with columns."
+    (prep-mapped-value columns :list (array-to-list values))))
 
 
 

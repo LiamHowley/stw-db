@@ -162,10 +162,12 @@ have no value.")
 
 
 (define-layered-method generate-component
-  :in delete-table ((map slot-mapping) (slot-to-go-p function)  &key)
-  (let ((class (mapped-table map))
-	(mapped-column (slot-definition-name (mapped-column map)))
-	(typed-array-name (format nil "delete_~(~a~)" (slot-definition-name (mapping-slot map)))))
+  :in delete-table ((map slot-mapping) (slot-to-go-p function) &key)
+  (let* ((class (mapped-table map))
+	 (mapped-column (mapped-column map))
+	 (mapped-columns (mapped-columns map))
+	 (mapping-slot (mapping-slot map))
+	 (typed-array-name (format nil "delete_~(~a~)" (slot-definition-name mapping-slot))))
     (with-slots (schema table require-columns primary-keys) class
       (let ((table-name (set-sql-name schema table))
 	    (type-array (format nil "~a.~a_type[]" schema table))
@@ -178,11 +180,16 @@ have no value.")
 	  for domain = (slot-value column 'domain)
 	  for slot-value-p = (funcall slot-to-go-p column)
 	  with require-column = nil
-	  if (and (eq (slot-definition-name column) mapped-column)
+	  if (and mapped-column
+		  (eq column mapped-column)
 		  slot-value-p)
 	    do (setf require-column column-name)
-	    and collect column-name into required-columns
 	  else
+	    if (and mapped-columns
+		    (member column mapped-columns :test #'eq)
+		    slot-value-p)
+	      collect column-name into required-columns
+	  else 
 	    if (and (member column require-columns :test #'equality)
 		    slot-value-p)
 	      collect column-name into required-columns
@@ -194,12 +201,20 @@ have no value.")
 	  finally (return
 		    (when (or where require-column)
 		      (make-component
-		       :sql (format nil "DELETE FROM ~a WHERE ~{~a~^ AND~% ~};"
+		       :sql (format nil "DELETE FROM ~a WHERE~{ ~a~^ AND~};"
 				    table-name
 				    `(,@(mapcar #'(lambda (column-name)
 						    (format nil "~a = $~~a" column-name))
 						where)
-				      ,(format nil "~a IN (SELECT ~{~a~^, ~} FROM UNNEST ($~~a))"
-					       require-column required-columns)))
+				      ,(cond (mapped-column
+					      (format nil "~a IN (SELECT ~a FROM UNNEST ($~~a))"
+						      require-column require-column))
+					     (mapped-columns
+					      (let ((where (mapcar #'(lambda (column)
+								       (let ((col-name (column-name column)))
+									 (format nil "~a = ~a.~a" col-name table-name col-name)))
+								   mapped-columns)))
+						(format nil "EXISTS (SELECT ~{~a~^, ~} FROM UNNEST ($~~a) WHERE~{ ~a~^ AND~})"
+							required-columns where))))))
 		       :params `(,@args (,(if single-row :inout :in) ,typed-array-name ,type-array))
-		       :param-controls `(,@p-controls ,(sql-typed-array class))))))))))
+		       :param-controls `(,@p-controls ,(sql-typed-array map))))))))))
