@@ -3,17 +3,18 @@
 
 (define-layered-method get-key
   :in update-node ((old serialize) (new serialize) &rest rest &key)
-  (declare (ignore rest))
-  (loop
-    for slot in (filter-slots-by-type (class-of old) 'db-base-column-definition) 
-    for slot-name = (slot-definition-name slot)
-    for old-value = (slot-value old slot-name)
-    for new-value = (slot-value new slot-name)
-    when old-value
-      collect slot-name into where 
-    when new-value
-      collect slot-name into set 
-    finally (return (list set where))))
+  (let ((params
+	  (loop
+	    for slot in (filter-slots-by-type (class-of old) 'db-base-column-definition) 
+	    for slot-name = (slot-definition-name slot)
+	    for old-value = (slot-value old slot-name)
+	    for new-value = (slot-value new slot-name)
+	    when old-value
+	      collect slot-name into where 
+	    when new-value
+	      collect slot-name into set 
+	    finally (return (list set where)))))
+    (push params rest)))
 
 
 (define-layered-method sync
@@ -183,7 +184,9 @@ or primary keys not matching will invoke an error.")
 	 (procedure (make-instance 'procedure
 				   :schema (slot-value base-class 'schema)
 				   :table (class-name base-class)
-				   :name (format nil "~(~a~)_update" (db-syntax-prep (class-name base-class))))))
+				   :name (format nil "~(~a~)_update_~a"
+						 (db-syntax-prep (class-name base-class))
+						 (proc-id rest)))))
     (multiple-value-bind (tables where set to-insert to-delete)
 	(one-to-one-update-components old new)
       (let ((components (update-components tables (mapcar #'car where) (mapcar #'car set))))

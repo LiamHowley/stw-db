@@ -149,9 +149,7 @@
 					    :schema schema
 					    :name (format nil "~a_retrieve_~a"
 							  (db-syntax-prep (class-name base-class))
-							  (db-syntax-prep
-							   (write-to-string
-							    (make-v3-uuid +namespace-oid+ (write-to-string `(,@slot-names ,@rest))))))
+							  (proc-id `(,@slot-names ,@rest)))
 					    :vars (if select-columns
 						      (mapcar #'(lambda (column)
 								  (return-var column))

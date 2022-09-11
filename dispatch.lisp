@@ -9,6 +9,12 @@
        ,@body)))
 
 
+(defun proc-id (list)
+  (db-syntax-prep
+   (write-to-string
+    (make-v3-uuid +namespace-oid+ (write-to-string list)))))
+
+
 (define-layered-function (setf proc-template) (new-value class component &rest rest &key &allow-other-keys)
   (:documentation "Cache procedure in hash-table. Hash table is context dependent and derived from
 calling db-template-register.")
@@ -40,7 +46,8 @@ calling db-template-register.")
 
   (:method 
       :in db-op ((class serialize) component &rest rest &key)
-    (nth-value 1 (slots-with-values class)))
+    (let ((slots (nth-value 1 (slots-with-values class))))
+      (push slots rest))))
 
   (:method
       :in db-op ((class serialize) (component db-table-class) &rest rest &key)

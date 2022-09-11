@@ -48,7 +48,9 @@ not set to cascade on deletion, then data will be orphaned."
 	 (schema (slot-value base-class 'schema))
 	 (procedure (make-instance 'procedure
 				   :schema schema
-				   :name (format nil "~a_delete" (db-syntax-prep (class-name base-class))))))
+				   :name (format nil "~a_delete_~a"
+						 (db-syntax-prep (class-name base-class))
+						 (proc-id rest)))))
     (with-slots (schema sql-list args p-controls relevant-slots) procedure
       (if (every (lambda (slot)
 		   (let ((slot-name (slot-definition-name slot)))
