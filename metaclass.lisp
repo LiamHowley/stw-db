@@ -130,8 +130,12 @@ with a single column of type serial."))
 
 (define-layered-method initialize-in-context
   :in db-interface-layer ((slot db-aggregate-slot-definition) 
-			  &key maps-table maps-column maps-columns)
+			  &key maps-table maps-column maps-columns type)
   (with-slots (maps) slot
+    (setf (slot-definition-type slot)
+	  (or type
+	      (when (typep type 'boolean)
+		'list)))
     (when maps-table
       (unless (find-class maps-table)
 	(error "the table ~a specified in maps-table does not exist" maps-table))
