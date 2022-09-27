@@ -301,9 +301,9 @@
 	      '((:OUT "_id" :INTEGER) (:OUT "_user_id" :INTEGER)
 		(:IN "stw_test_schema.user_email_type[]"))
 	      (slot-value procedure 'stw.db::args))
-	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_email_type[])"
+	  (is string= "CALL stw_test_schema.user_insert_1e8ac368_5f7a_37e0_8bc1_9b5550350b69 (null, null, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_email_type[])"
 	      (slot-value procedure 'stw.db::p-control))
-	  (is string= "CALL stw_test_schema.user_insert (null, null, ARRAY[ ROW (E'liam@foobar.com')]::stw_test_schema.user_email_type[])"
+	  (is string= "CALL stw_test_schema.user_insert_1e8ac368_5f7a_37e0_8bc1_9b5550350b69 (null, null, ARRAY[ ROW (E'liam@foobar.com')]::stw_test_schema.user_email_type[])"
 	      (dispatch-statement *user* procedure))))
 
       (setf (slot-value *account* 'emails) '("foo@bar.com"))
@@ -327,10 +327,10 @@
 		'(("stw_test_schema.user_email_id") (:inout "delete_emails" "stw_test_schema.user_email_type[]"))
 		(slot-value procedure 'stw.db::args))
 	    (is string=
-		"CALL stw_test_schema.account_update (~a, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_email_type[])"
+		"CALL stw_test_schema.account_update_1e8ac368_5f7a_37e0_8bc1_9b5550350b69 (~a, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_email_type[])"
 		(slot-value procedure 'stw.db::p-control))
 	    (is string=
-		"CALL stw_test_schema.account_update (1, ARRAY[ ROW (E'foo@bar.com')]::stw_test_schema.user_email_type[])"
+		"CALL stw_test_schema.account_update_1e8ac368_5f7a_37e0_8bc1_9b5550350b69 (1, ARRAY[ ROW (E'foo@bar.com')]::stw_test_schema.user_email_type[])"
 		(update-op-dispatch-statement *account* clone procedure)))))
       
       (let* ((map (stw.db::match-mapping-node (find-class 'account) (find-class 'user-site)))

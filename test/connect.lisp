@@ -4,8 +4,8 @@
 
 (defmacro live-tests ()
   `(progn
-     (test 'live-test)
-     (db-connect db (db-layer) (drop-schema *schema* t))))
+     (unwind-protect (test 'live-test)
+       (db-connect db (db-layer) (drop-schema *schema* t)))))
 
 (define-test live-test)
   
