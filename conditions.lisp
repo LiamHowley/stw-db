@@ -15,8 +15,8 @@
   (:report (lambda (c s)
 	     (format s "Null value for key ~s in class ~s. May affect more than one record."
 		     (slot-name c) (class-name (class-of (object c))))))
-  (:documentation "When updating, root table primary key values are essential in order 
-to keep the update to specific database tuples. Without a root table key the likelihood
+  (:documentation "When updating/deleting, root table primary key values are essential in order 
+to keep the operation to specific database tuples. Without a root table key the likelihood
 of an update affecting more than one tuple is high."))
 
 (defun null-key-error (slot-name object)
@@ -26,10 +26,10 @@ of an update affecting more than one tuple is high."))
 
 (defun not-an-error ()
   "NULL-KEY-ERROR is invoked when a root table key is either unbound or assigned null value.
-It is not always an error however. In specific contexts it my result in a delete operation, or
+It is not always an error however. In specific contexts it may result in a delete operation, or
 an update, on tables not subject to a cascade.
 
-Bear in mind that all other slots with or without values will determine the nature of the 
+Bear in mind that all other slots, with or without values, will determine the nature of the 
 query."
   (let ((restart (find-restart 'not-an-error)))
     (when restart (invoke-restart restart))))
@@ -55,10 +55,11 @@ on handling this error. In the event that an update of values is desired, select
 
 (defun use-expected-value ()
   "IMPORTANT: The purpose of providing a USE-EXPECTED-VALUE restart is to update varied objects of the
-same class type but with fixed values and under specific circumstances. As an error is called and the restart
-invoked, the error value is amended to the expected value so that the process of updating the node
-can continue as before.  However, unless the respective key values are expected to differ, this restart 
-should be approached with caution. The root keys of a node should match. That they do not match must 
-be deliberate and should not occur carelessly."
+same class type but with fixed values and under specific circumstances, (e.g. updating from a template 
+or resetting to some default state). As an error is called and the restart invoked, the error value is 
+amended to the slot EXPECTED-VALUE so that the process of updating the node can continue as before.  
+However, unless the respective key values are expected to differ, this restart should be approached with 
+caution. The root keys of a node should match. That they do not match must be deliberate and should not 
+occur carelessly."
   (let ((restart (find-restart 'use-expected-value)))
     (when restart (invoke-restart restart))))
