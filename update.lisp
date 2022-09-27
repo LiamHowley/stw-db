@@ -81,8 +81,8 @@ or primary keys not matching will invoke an error.")
 							     '("{\"(\\\"" "\\\")\",(" "\\\")" "{(" "),(" ")(" ")}" "),\"(\\\"" "\\\")\"}")
 							     :remove-separators t))
 					    (columns
-					     (let ((xtype (slot-value slot 'express-as-type)))
-					       (parse-op-result columns xtype next-field))))))
+					     (let ((type (slot-value slot 'express-as-type)))
+					       (parse-result slot columns type next-field))))))
 			 (loop
 			   for value in list
 			   do (case (slot-definition-type slot)
@@ -101,8 +101,8 @@ or primary keys not matching will invoke an error.")
 							     '("{\"(\\\"" "\\\")\",(" "\\\")" "{(" "),(" ")(" ")}" "),\"(\\\"" "\\\")\"}")
 							     :remove-separators t))
 					    (columns
-					     (let ((xtype (slot-value slot 'express-as-type)))
-					       (parse-op-result columns xtype next-field))))))
+					     (let ((type (slot-value slot 'express-as-type)))
+					       (parse-result slot columns type next-field))))))
 				(loop
 				  for value in list
 				  do (setf (slot-value class slot-name)
@@ -131,43 +131,57 @@ or primary keys not matching will invoke an error.")
 	finally (return class)))))
 
 
-(define-layered-function parse-op-result (column type result)
+(define-layered-method parse-result
+  :in update-node ((slot db-aggregate-slot-definition) (columns cons) (type (eql :alist)) result)
+  (let ((rows (explode-string result '("{\"(" ")\",\"(" ")\"}")
+			      :remove-separators t)))
+    (loop
+      for row in rows
+      for row-list = (explode-string row #\, :remove-separators t)
+      when row-list
+	collect (loop
+		  for item in row-list
+		  for column in columns
+		  collect (cons (slot-definition-name column) item)))))
 
-  (:method
-      :in update-node ((columns cons) (type (eql :alist)) result)
-    (let ((rows (explode-string result '("{\"(" ")\",\"(" ")\"}")
-				:remove-separators t)))
-      (loop
-	for row in rows
-	for row-list = (explode-string row #\, :remove-separators t)
-	when row-list
-	  collect (loop
-		    for item in row-list
-		    for column in columns
-		    collect (cons (slot-definition-name column) item)))))
+(define-layered-method parse-result
+  :in update-node ((slot db-aggregate-slot-definition) (columns cons) (type (eql :list)) result)
+  (let ((rows (explode-string result '("{\"(" ")\",\"(" ")\"}")
+			      :remove-separators t)))
+    (loop
+      for row in rows
+      for row-list = (explode-string row #\, :remove-separators t)
+      when row-list
+	collect row-list)))
 
-  (:method
-      :in update-node ((columns cons) (type (eql :list)) result)
-    (let ((rows (explode-string result '("{\"(" ")\",\"(" ")\"}")
-				:remove-separators t)))
-      (loop
-	for row in rows
-	for row-list = (explode-string row #\, :remove-separators t)
-	when row-list
-	  collect row-list)))
+(define-layered-method parse-result
+  :in db-layer ((slot db-aggregate-slot-definition) (columns cons) (type (eql :plist)) result)
+  (let ((rows (explode-string result '("{\"(" ")\",\"(" ")\"}")
+			      :remove-separators t)))
+    (loop
+      for row in rows
+      for row-list = (explode-string row #\, :remove-separators t)
+      when row-list
+	collect (loop
+		  for result in row-list
+		  for column in columns
+		  for key = (car (slot-definition-initargs column))
+		  when (and key result)
+		    collect key 
+		    and collect result))))
 
-  (:method
-      :in update-node ((columns cons) (type (eql :array)) result)
-    (let ((rows% (explode-string result '("{\"(" ")\",\"(" ")\"}")
-				 :remove-separators t))
-	  (rows (loop
-		  for row in rows%
-		  for row-list = (explode-string row #\, :remove-separators t)
-		  when row-list
-		    collect row-list)))
-      (when rows
-	(make-array (list (length rows)(length (car rows)))
-		    :initial-contents rows)))))
+(define-layered-method parse-result
+  :in update-node ((slot db-aggregate-slot-definition) (columns cons) (type (eql :array)) result)
+  (let ((rows% (explode-string result '("{\"(" ")\",\"(" ")\"}")
+			       :remove-separators t))
+	(rows (loop
+		for row in rows%
+		for row-list = (explode-string row #\, :remove-separators t)
+		when row-list
+		  collect row-list)))
+    (when rows
+      (make-array (list (length rows)(length (car rows)))
+		  :initial-contents rows))))
 
 
 
@@ -269,22 +283,6 @@ or primary keys not matching will invoke an error.")
     procedure))
 
 
-
-;;; Delete and update operations being procedures do not
-;;; support multiple return values. Thus, any delete operation where
-;;; the primary key values are absent must have no return values or
-;;; PG will return an error.
-
-;;; TODO
-;;; Something could be done about this, maybe return the number of
-;;; rows affected. Better yet(?), upstream, when the error is invoked,
-;;; add a restart viewing the affected nodes before deleting/updating.
-
-;;; Reason for not using a function??? Rollback support to be added
-;;; in the near future?
-
-;;; Should the object OLD be destroyed automatically or leave that
-;;; to the discretion of the user?
 
 (define-layered-function collate-tables (old new)
   (:method

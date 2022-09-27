@@ -47,7 +47,7 @@ calling db-template-register.")
   (:method 
       :in db-op ((class serialize) component &rest rest &key)
     (let ((slots (nth-value 1 (slots-with-values class))))
-      (push slots rest))))
+      (push slots rest)))
 
   (:method
       :in db-op ((class serialize) (component db-table-class) &rest rest &key)
@@ -143,16 +143,35 @@ to class(es).")
 						  (array-to-list next-field)
 						  next-field))))
 				     (columns
-				      (let ((xtype (slot-value self 'express-as-type)))
+				      (let ((type (slot-value self 'express-as-type)))
 					(setf (slot-value node slot-name)
-					      (parse-json-result columns xtype next-field))))))))))))
+					      (parse-result self columns type next-field))))))))))))
 	    collect node into nodes
 	    finally (return (if (eql i 0) node nodes))))))))
 
 
-(define-layered-function parse-json-result (columns type result)
+(define-layered-function parse-result (slot columns type result)
+  (:documentation "PARSE-RESULT is invoked when a result of aggregated 
+values is returned in json format.")
+
   (:method
-      :in db-layer ((columns cons) (type (eql :alist)) result)
+      :in retrieve-node 
+      :around ((slot db-aggregate-slot-definition) (columns cons) (type (eql :alist)) result)
+    (let ((type (slot-definition-type slot))
+	  (parsed-results (call-next-method)))
+      (if (eq type 'array)
+	  (make-array (length parsed-results) :initial-contents parsed-results :adjustable t :fill-pointer t)
+	  parsed-results)))
+
+  (:method
+      :in db-layer ((slot db-aggregate-slot-definition) (columns cons) type result)
+    ;; default to alist
+    (declare (ignore type))
+    (parse-result slot columns :alist result))
+
+  (:method
+      :in db-layer ((slot db-aggregate-slot-definition) (columns cons) (type (eql :alist)) result)
+    (declare (ignore slot type))
     (let ((list (json-array-to-list result)))
       (loop
 	for row in list
@@ -161,7 +180,38 @@ to class(es).")
 		  for column in columns
 		  for slot-name = (slot-definition-name column)
 		  when (and slot-name result)
-		    collect (cons slot-name result))))))
+		    collect (cons slot-name result)))))
+
+  (:method
+      :in db-layer ((slot db-aggregate-slot-definition) (columns cons) (type (eql :plist)) result)
+    (declare (ignore slot type))
+    (let ((list (json-array-to-list result)))
+      (loop
+	for row in list
+	collect (loop
+		  for result in row
+		  for column in columns
+		  for key = (car (slot-definition-initargs column))
+		  when (and key result)
+		    collect key 
+		    and collect result))))
+
+  (:method
+      :in db-layer ((slot db-aggregate-slot-definition) (columns cons) (type (eql :list)) result)
+    (declare (ignore slot columns type))
+    (json-array-to-list result))
+
+  (:method
+      :in db-layer ((slot db-aggregate-slot-definition) (columns cons) (type (eql :array)) result)
+    (declare (ignore slot columns type))
+    (let ((list (json-array-to-list result)))
+      (loop
+	for row in list
+	collect (make-array (length row) 
+			    :initial-contents (loop
+						for result in row
+						when result
+						  collect result))))))
 
 
 (defun json-array-to-list (array)

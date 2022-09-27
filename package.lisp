@@ -151,6 +151,7 @@
    ;; ops
    :sync
    :read-row-to-class
+   :parse-result
 
    ;; template dispatch and caching
    :get-key
