@@ -263,6 +263,10 @@ be deliberate and should not occur carelessly.
 
 
 
-* TODO Add support for additional options for select queries: aggregate functions such as count, max, etc, with having and group-by. The latter could be done by adding an additional interface type/context???
-* TODO Add additional transaction support for procedures such as commit, rollback, and savepoint.
-* TODO Revisit dates, and look at intervals.
+* To do
+
+ 1 Add support for additional options for select queries: aggregate functions such as count, max, etc, with having and group-by. The latter could be done by adding an additional interface type/context???
+
+ 2 Add additional transaction support for procedures such as commit, rollback, and savepoint.
+
+ 3 Revisit dates, and look at intervals.
