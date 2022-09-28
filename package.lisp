@@ -31,17 +31,17 @@
    :array-to-list)
 
   (:import-from
-   :stw.meta
+   :cl-comp
    :with-context
    :delete-context
    :define-base-class
-   :stw-base-layer
    :serialize
    :serialized-p
    :base-class
-   :stw-base-class
-   :stw-direct-slot-definition
-   :stw-layer-context
+   :comp-base-layer
+   :comp-base-class
+   :comp-direct-slot-definition
+   :comp-layer-context
    :slot-definition-class
    :initialize-in-context
    :find-slot-definition

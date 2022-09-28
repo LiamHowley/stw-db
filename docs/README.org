@@ -6,7 +6,7 @@
 
 * Introduction
 
-STW-DB is a context oriented Object Relational Model that uses STW-META and [[https://marijnhaverbeke.nl/postmodern/cl-postgres.html][CL-POSTGRES]] to dynamically generate environmentally constrained stored procedures and query functions. Procedure/function generation is cached, and the appropriate procedure to be called is determined by both the presence of slot values in the queried object and some additional relevant parameters. 
+STW-DB is a context oriented Object Relational Model that uses CL-COMP and [[https://marijnhaverbeke.nl/postmodern/cl-postgres.html][CL-POSTGRES]] to dynamically generate environmentally constrained stored procedures and query functions. Procedure/function generation is cached, and the appropriate procedure to be called is determined by both the presence of slot values in the queried object and some additional relevant parameters. 
 
 Warning: This is a beta version. The API is subject to change.
 
@@ -58,14 +58,14 @@ Clearing a connection pool is achieved by passing a defined environment to the C
 Access to the connection pool is limited to the layered functions MAKE-CONNECTION and CLOSE-CONNECTION both of which are called automatically by the DB-CONNECT macro. Both make best attempts to use atomic procedures, otherwise a lock is used to protect pool access during push/pop operations.
 
 
-* STW-META and CONTEXTL
+* CL-COMP and CONTEXTL
 
-STW-DB uses STW-META, a thin wrapper around [[https://github.com/pcostanza/contextl][CONTEXTL]]. For further information about the protocol STW-DB uses to define table classes or interface nodes please see the documentation for STW-META. With that said, the section on class definition initialization is repeated here:
+STW-DB uses CL-COMP, a thin wrapper around [[https://github.com/pcostanza/contextl][CONTEXTL]]. For further information about the protocol STW-DB uses to define table classes or interface nodes please see the documentation for CL-COMP. With that said, the section on class definition initialization is repeated here:
 
 #+BEGIN_QUOTE 
  Initializing the class definition - important!
 
- As layered classes are subclasses of STANDARD-CLASS, initialization protocols proceed as per normal. As such, context specific initialization procedures should not be placed within initialize-instance, reinitialize-instance or shared-initialize methods. To put it simply, they are not thread safe. Instead the layered function INITIALIZE-IN-CONTEXT is called from the auxiliary :around method of shared-initialize, and after the call to call-next-method. Context and class specific initialization procedures should be placed in specialized instances of this layered function. It is for this reason that layered classes of type STW-BASE-CLASS are defined within their layer context.
+ As layered classes are subclasses of STANDARD-CLASS, initialization protocols proceed as per normal. As such, context specific initialization procedures should not be placed within initialize-instance, reinitialize-instance or shared-initialize methods. To put it simply, they are not thread safe. Instead the layered function INITIALIZE-IN-CONTEXT is called from the auxiliary :around method of shared-initialize, and after the call to call-next-method. Context and class specific initialization procedures should be placed in specialized instances of this layered function. It is for this reason that layered classes of type COMP-BASE-CLASS are defined within their layer context.
 #+END_QUOTE
 
 ** Context Layers

@@ -8,7 +8,7 @@
 ;;; the above inherit from DB-LAYER, which creates an
 ;;; environment within which it's sub-layers can alternate.
 
-(defclass stw-db-context (stw-layer-context)
+(defclass stw-db-context (comp-layer-context)
   ())
 
 (defclass stw-table (stw-db-context)
@@ -17,14 +17,14 @@
 (defclass stw-interface (stw-db-context)
   ())
 
-(deflayer db-layer (stw-base-layer)
+(deflayer db-layer (comp-base-layer)
   ()
   (:metaclass stw-db-context))
 
 
 
 (define-layered-method adjoin-layer-using-class
-  :in-layer db-layer ((layer stw-layer-context) active-layers)
+  :in-layer db-layer ((layer comp-layer-context) active-layers)
   ;; on layer activation deactivate other layers of the same layer type
   (values 
    (call-next-layered-method

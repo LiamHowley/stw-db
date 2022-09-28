@@ -1,6 +1,6 @@
 (defsystem #:stw-db-test
   :description "Test suite for stw-db."
-  :depends-on ("cl-postgres" "parachute" "stw-meta" "stw-db" "contextl")
+  :depends-on ("cl-postgres" "parachute" "cl-comp" "stw-db" "contextl")
   :serial t
   :components ((:file "package")
 	       (:file "connect")

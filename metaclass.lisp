@@ -28,7 +28,7 @@
   '(:tables))
 
 (defclass db-base-column-definition
-    (stw-direct-slot-definition)
+    (comp-direct-slot-definition)
   ())
 
 (defclass db-aggregate-slot-definition (db-base-column-definition)
@@ -104,10 +104,10 @@ Set as alist ((COLUMN . VALUE))")))
   'db-column-slot-definition)
 
 (define-layered-class db-interface-class
-  :in-layer db-interface-layer (stw-base-class db-wrap) ())
+  :in-layer db-interface-layer (comp-base-class db-wrap) ())
 
 (define-layered-class db-table-class
-  :in-layer db-table-layer (stw-base-class db) ())
+  :in-layer db-table-layer (comp-base-class db) ())
 
 (define-layered-class db-key-table
   :in-layer db-table-layer (db-table-class)

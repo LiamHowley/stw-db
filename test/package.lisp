@@ -4,7 +4,7 @@
    :contextl
    :with-active-layers)
   (:import-from
-   :stw.meta
+   :cl-comp
    :clone-object
    :find-slot-definition)
   (:import-from

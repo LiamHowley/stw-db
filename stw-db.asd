@@ -1,5 +1,5 @@
 (defsystem "stw-db"
-    :depends-on ("stw-meta"
+    :depends-on ("cl-comp"
 		 "stw-utils"
 		 "uuid"
 		 "cl-postgres"
