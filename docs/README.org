@@ -10,6 +10,13 @@ STW-DB is a context oriented Object Relational Model that uses CL-COMP and [[htt
 
 Warning: This is a beta version. The API is subject to change.
 
+* Purpose and Compatibility
+
+As the dependence on [[https://marijnhaverbeke.nl/postmodern/cl-postgres.html][CL-POSTGRES]] suggests, STW-DB only works with PostgreSQL, specifically version 14 and over. No effort has been made to support prior versions of PostgreSQL. It is intended to provide a quick, simple, and efficient interface for building and querying a database instance across multiple relations, mapping directly to an application object within a defined context.
+
+It has been tested only SBCL.
+
+My gratitude to Marijn Haverbeke for CL-POSTGRES.
 
 * To Load
 
