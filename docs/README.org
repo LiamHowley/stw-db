@@ -22,7 +22,7 @@ Connections are made by passing an environment variable to the DB-CONNECT macro,
 
 #+BEGIN_SRC lisp
 (define-db-environment db
-    (connection-params *P "<DATABASE PARAMETER FILE>"))
+    (connection-params #P "<DATABASE PARAMETER FILE>"))
 
 (db-connect db (db-layer)
             <-- do something here -->)
