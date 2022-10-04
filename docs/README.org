@@ -4,13 +4,14 @@
 
 #+OPTIONS: toc
 
-* Introduction
+** Introduction
 
 STW-DB is a context oriented Object Relational Model that uses CL-COMP and [[https://marijnhaverbeke.nl/postmodern/cl-postgres.html][CL-POSTGRES]] to dynamically generate environmentally constrained stored procedures and query functions. Procedure/function generation is cached, and the appropriate procedure to be called is determined by both the presence of slot values in the queried object and some additional relevant parameters. 
 
 Warning: This is a beta version. The API is subject to change.
 
-* Purpose and Compatibility
+
+** Purpose and Compatibility
 
 As the dependence on [[https://marijnhaverbeke.nl/postmodern/cl-postgres.html][CL-POSTGRES]] suggests, STW-DB only works with PostgreSQL, specifically version 14 and over. No effort has been made to support prior versions of PostgreSQL. It is intended to provide a quick, simple, and efficient interface for building and querying a database instance across multiple relations, mapping directly to an application object within a defined context.
 
@@ -18,12 +19,13 @@ It has been tested only SBCL.
 
 My gratitude to Marijn Haverbeke for CL-POSTGRES.
 
-* To Load
+
+** To Load
 
 Use quickload to call ~(ql:quickload :stw-db)~. If not found in the quickload repositories, add to your local-projects directory.
 
 
-* Connecting to a database
+** Connecting to a database
 
 Connections are made by passing an environment variable to the DB-CONNECT macro, along with a layered context. DB-CONNECT provides a database connection ~*DB*~ that can be captured and called by database querying functions. Defining an environment variable is relatively straightforward: 
 
@@ -36,7 +38,7 @@ Connections are made by passing an environment variable to the DB-CONNECT macro,
 #+END_SRC
             
 
-** Database parameters file
+*** Database parameters file
 
 The database parameter file must contain the name of the database, the USER, PASSWORD and HOST. Optional parameters include PORT, POOLED-P, USE-SSL, USE-BINARY, SERVICE and APPLICATION-NAME. A template file can be found at source. If used it should be moved to a location outside of an application's home directory.
 
@@ -54,7 +56,7 @@ HOST="<db-host>"
 #+END_SRC
 
 
-** Connections
+*** Connections
 
 By default STW-DB uses connection pools. Each connection pool is tied to an environment. For any specific environment a connection limit can be set either directly when defining the environment, or by use of the SET-CONNECTION-LIMIT macro.
 
@@ -65,7 +67,7 @@ Clearing a connection pool is achieved by passing a defined environment to the C
 Access to the connection pool is limited to the layered functions MAKE-CONNECTION and CLOSE-CONNECTION both of which are called automatically by the DB-CONNECT macro. Both make best attempts to use atomic procedures, otherwise a lock is used to protect pool access during push/pop operations.
 
 
-* CL-COMP and CONTEXTL
+** CL-COMP and CONTEXTL
 
 STW-DB uses CL-COMP, a thin wrapper around [[https://github.com/pcostanza/contextl][CONTEXTL]]. For further information about the protocol STW-DB uses to define table classes or interface nodes please see the documentation for CL-COMP. With that said, the section on class definition initialization is repeated here:
 
@@ -75,7 +77,7 @@ STW-DB uses CL-COMP, a thin wrapper around [[https://github.com/pcostanza/contex
  As layered classes are subclasses of STANDARD-CLASS, initialization protocols proceed as per normal. As such, context specific initialization procedures should not be placed within initialize-instance, reinitialize-instance or shared-initialize methods. To put it simply, they are not thread safe. Instead the layered function INITIALIZE-IN-CONTEXT is called from the auxiliary :around method of shared-initialize, and after the call to call-next-method. Context and class specific initialization procedures should be placed in specialized instances of this layered function. It is for this reason that layered classes of type COMP-BASE-CLASS are defined within their layer context.
 #+END_QUOTE
 
-** Context Layers
+*** Context Layers
 
 There are three basic layers. The most primitive is DB-TABLE-LAYER, which as the name suggests is for direct mapping with database tables. The next is a higher level DB-INTERFACE-LAYER which interfaces with layered application objects. Both of the above inherit from DB-LAYER, which creates an environment within which its sub-layers can nest and alternate.
 
@@ -83,7 +85,7 @@ Inheriting from DB-TABLE-LAYER is INSERT-TABLE and DELETE-TABLE. Inheriting from
 
 
 
-* Table Definitions
+** Table Definitions
 
 Three macros are provided for database table definitions: DEFINE-KEY-TABLE, DEFINE-DB-TABLE and DEFINE-INTERFACE-NODE.
 
@@ -94,7 +96,7 @@ DEFINE-KEY-TABLE defines a key table of type DB-KEY-TABLE in the DB-TABLE-LAYER 
 #+END_SRC
 
 
-** DB-TABLE-CLASS
+*** DB-TABLE-CLASS
 
 DEFINE-DB-TABLE defines a table of type DB-TABLE-CLASS in the DB-TABLE-LAYER context.
 
@@ -137,11 +139,11 @@ A table class is also a singleton, and maps directly to a database table/relatio
 #+END_SRC
 
 
-** DB-INTERFACE-NODE
+*** DB-INTERFACE-NODE
 
 DEFINE-INTERFACE-NODE defines a layered class of type DB-INTERFACE-CLASS. An interface node inherits slots from one or more table classes, and can in turn be inherited itself. All directly defined slots of DB-INTERFACE-CLASS are of the type DB-AGGREGATE-SLOT-DEFINITION and are used as the mapping slots aggregating the multiple values of a one to many relation. 
 
-*** Mapping a single column 
+**** Mapping a single column 
 
 To map a single column, DB-AGGREGATE-SLOT-DEFINITIION contains the initargs :maps-table and :maps-column. The initarg :maps-table requires the name, (a symbol), of a DB-TABLE-CLASS definition, while :maps-column requires the name, (also a symbol), of a slot of type DB-COLUMN-SLOT-DEFINITION of the same table class. As the result is expected to be a collection of values, the return type is determined by the slot-definition-type of the mapping slot, (i.e. the initarg :type), which defaults to list.
 
@@ -151,7 +153,7 @@ To map a single column, DB-AGGREGATE-SLOT-DEFINITIION contains the initargs :map
   ((sites :maps-table user-site :maps-column site :type list)))
 #+END_SRC
 
-*** Mapping multiple columns
+**** Mapping multiple columns
 
 Similar to mapping a single column DB-AGGREGATE-SLOT-DEFINITION contains the initargs :maps-table and :maps-columns. The initarg :maps-columns requires a list of slot names, (as symbols), of the class specified by :maps-table. Additionally, the initarg :express-as-type is provided for the returned results. EXPRESS-AS-TYPE expects a value of type keyword and defaults to :alist. As with a single column mapping, the slot-definition-type of the mapping slot determines the type of collection in which the results will be contained.
 
@@ -161,26 +163,26 @@ Similar to mapping a single column DB-AGGREGATE-SLOT-DEFINITION contains the ini
   ((sites :maps-table user-site :maps-columns (id site) :express-as-type :alist)))
 #+END_SRC
 
-*** Root table and the root key
+**** Root table and the root key
 
 In concept, an interface node is a tree of relations mapped onto a database. A list of relevant tables is aggregated during compilation including both table classes listed as superclasses and tables mapped by slots of type DB-AGGREGATE-SLOT-DEFINITION. This list of tables is stored in the class slot TABLES and sorted so that column slots referenced by foreign keys always precede the referring slot. The first table in the list TABLES after sorting is considered the root table, which is used directly in the protocol for delete operations, and indirectly in select and update operations where in the former the order-by clause defaults to the root key, (the primary keys of the root table), whilst in the latter, a necessary precondition is to match the root key values of the instance to be updated with the updating object. In a manner of speaking, the primary keys of the root table act as defacto primary keys of the interface node.
 
 
 
-* Procedures and Functions
+** Procedures and Functions
 
 Procedures and functions are created by the layered function GENERATE-PROCEDURE, which is called by the layered function SYNC. SYNC takes an interface node and component, and various keyword arguments, and caches the resulting procedure/function.
 
 
 
-* Refreshing the Cache
+** Refreshing the Cache
 
 To refresh the cached procedure simply set the refresh-cache keyword when invoking SYNC.
 
 
-* DB Queries and Operations
+** DB Queries and Operations
 
-** Inserting a record:
+*** Inserting a record:
 
 #+BEGIN_SRC lisp
 (db-connect db (insert-node) (sync (make-instance 'account) nil))
@@ -195,7 +197,7 @@ To insert into one table only provide the additional component, (i.e. DB-TABLE-C
 #+END_SRC
 
 
-** Updating a record:
+*** Updating a record:
 
 #+BEGIN_SRC lisp
 (db-connect db (update-node) (sync <old> <new>))
@@ -206,7 +208,7 @@ When updating, <old> refers to the original application object we wish to update
 Should the updating of multiple records be desired, the restart USE-EXPECTED-VALUE.
 
 
-** Deleting a record:
+*** Deleting a record:
 
 #+BEGIN_SRC lisp
 (db-connect db (delete-node) (sync <object> nil))
@@ -223,7 +225,7 @@ To delete from one table only provide the additional component, (i.e. DB-TABLE-C
 #+END_SRC
 
 
-** Retrieving a record:
+*** Retrieving a record:
 
 #+BEGIN_SRC lisp
 (db-connect db (retrieve-node) (sync <object> nil))
@@ -232,45 +234,45 @@ To delete from one table only provide the additional component, (i.e. DB-TABLE-C
 In retrieving a node the values assigned to slots are used in the "where" clause of the select statement. Joins are by default inner-joins, however tables pushed to the key parameter :OPTIONAL-JOIN of the layered function SYNC are reordered and joined using a left outer join. Tables pushed to the :UNION-QUERY or UNION-ALL-QUERIES key parameters, are also queried by means of a nested select expression in the "from" clause.
 
 
-** Setting up:
+*** Setting up:
 
 The simplest procedure for setting up is to attempt to insert a record and let the insert fail. If a schema, table, type, or procedure is unknown, a database-error is returned and the necessary resource created recursively. Otherwise, a slew of layered functions is available to: CREATE-SCHEMA, SET-SCHEMA, SET-PRIVILEGED-USER, CREATE-TABLE-STATEMENT, FOREIGN-KEY-STATEMENTS, CREATE-PG-COMPOSITE, CREATE-TYPED-DOMAIN.
 
 Note: All foreign keys unless already indexed are automatically indexed.
 
 
-** Tearing down:
+*** Tearing down:
 
 TRUNCATE-TABLE, DROP-TABLE and DROP-SCHEMA, all require user confirmation to proceed.
 
 
 
-* Conditions and Restarts
+** Conditions and Restarts
 
 
-** null-key-error
+*** null-key-error
 
 Should the primary keys of the root table be unbound or null during an update or delete operation, an error of NULL-KEY-ERROR is invoked. As deleting / updating multiple rows according to specific column values may well have been the goal of the operation, a restart NOT-AND-ERRO is provided.
 
 
-** update-key-value-error
+*** update-key-value-error
 
 On copying an interface node object: If the original node has a root table primary key value while the clone has either no value, is unbound, or a value that does not match the original node, a correctable UPDATE-KEY-VALUE-ERROR is invoked, and the restart USE-EXPECTED-VALUE is provided. USE-EXPECTED-VALUE takes the value assigned to the primary keys of the original node, and assigns them to the respective slots of the clone, before continuing on its merry way. Thus a normal update may proceed. This is useful if updating a bunch of different nodes to fit a template of values. Say for example to reset values to some default. However, in the event that an update of values is desired, select CONTINUE. It should be noted though, that while an update will occur, the final operation will be a delete operation, where the root key record(s) being derived from select statement using supplied values are then deleted. As such any keys defaulting to a cascade, on deletion, will be lost.
 
 
-** not-an-error
+*** not-an-error
 
 The restart not-an-error mimics the behaviour of the continue restart, and can be invoked when a NULL-KEY-ERROR has been signalled.
 
 
-** use-expected-value
+*** use-expected-value
 
 The purpose of providing a USE-EXPECTED-VALUE restart is to update varied objects of the same class type but with fixed values and under specific circumstances, (e.g. updating from a template or resetting to some default state). As an error is called and the restart invoked, the error value is amended to the slot EXPECTED-VALUE so that the process of updating the node can continue as before. However, unless the respective key values are expected to differ, this restart should be approached with caution. The root keys of a node should match. That they do not match must 
 be deliberate and should not occur carelessly.
 
 
 
-* To do
+** To do
 
  1 Add support for additional options for select queries: aggregate functions such as count, max, etc, with having and group-by. The latter could be done by adding an additional interface type/context???
 
