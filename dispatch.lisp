@@ -244,6 +244,8 @@ Provides resolutions for missing schemas, types, tables,and constraints.")
 		   (exec (slot-value procedure 'p-control)))))
 	#'(lambda (query-function)
 	    (scase (database-error-code err)
+		   ("0A" (unless (> (get-postgresql-version *db*) 13)
+			   (error "Postgresql version 14 or higher required for STW-DB procedures.")))
 		   ("3F000"
 		    ;; MISSING SCHEMA
 		    ;; Response: Create schema and recurse
