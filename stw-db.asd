@@ -1,4 +1,6 @@
 (defsystem "stw-db"
+  :author "Liam Howley <liam.howley@thespanningtreeweb.ie>"
+  :license "MIT"
     :depends-on ("cl-comp"
 		 "stw-utils"
 		 "uuid"
@@ -7,7 +9,7 @@
 		 "atomics"
 		 "local-time"
 		 "cl-postgres+local-time")
-    :description ""
+    :description "A Context Oriented Object Relational Model for PostgreSQL, with a focus on cacheable procedures and functions."
     :serial t
     :components ((:file "package")
 		 (:file "conditions")
