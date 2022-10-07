@@ -84,10 +84,6 @@ Environment parameters are accessed within DB-CONNECT and the resulting connecti
 		 (close-connection *db* ,pool))))))))
 
 
-;;(define-db-environment db
-;;    (connection-params #P "~/.commune_db.params"))
-
-
 (defmacro clear-connection-pool (env)
   "Closes all connections and removes them from 
 the connection pool associated with env."
