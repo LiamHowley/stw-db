@@ -3,9 +3,13 @@
 (defparameter *file* nil)
 
 (defmacro live-tests ()
-  `(progn
-     (test 'live-test)
-     (db-connect db (db-layer) (drop-schema *schema* t))))
+  `(handler-case
+       (progn (test 'live-test)
+	      (db-connect db (db-layer)
+		(drop-schema *schema* t)))
+     (error () (db-connect db (db-layer)
+		  (when (cl-postgres:database-open-p stw.db::*db*)
+		    (drop-schema *schema* t))))))
 
 (define-test live-test)
   

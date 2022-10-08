@@ -22,7 +22,7 @@
     (safety-first
       (warn "Schema ~a is about to be dropped." schema)
       (restart-case
-	  (exec-query *db* (format nil "DROP SCHEMA ~(~a~)~@[ cascade~]" schema cascade))
+	  (exec-query *db* (format nil "DROP SCHEMA IF EXISTS ~(~a~)~@[ cascade~]" schema cascade))
 	(cascade () (drop-schema schema t))))))
 	  
 
