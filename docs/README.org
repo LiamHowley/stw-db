@@ -274,8 +274,10 @@ be deliberate and should not occur carelessly.
 
 ** To do
 
- 1 Add support for additional options for select queries: aggregate functions such as count, max, etc, with having and group-by. The latter could be done by adding an additional interface type/context???
+1. Add support for additional options for select queries: aggregate functions such as count, max, etc, with having and group-by. The latter could be done by adding an additional interface type/context???
 
- 2 Add additional transaction support for procedures such as commit, rollback, and savepoint.
+2. Add additional transaction support for procedures such as commit, rollback, and savepoint.
 
- 3 Revisit dates, and look at intervals.
+3. Revisit dates, and look at intervals.
+
+4. Standardize approach to returns across query types, and how they're handled.
