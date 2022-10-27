@@ -205,7 +205,7 @@ To insert into one table only provide the additional component, (i.e. DB-TABLE-C
 
 When updating, <old> refers to the original application object we wish to update. <new> refers to the values we wish to update <old> to. The procedure generated accords to those slots, whose values being present, differ between those of <new> and <old>.  A necessary condition to updating an object is that the root-key value in <old> corresponds to the root-key value in <new>. Otherwise the objects will be assumed to belong to different records and will result in the invocation of the correctable error [[*update-key-value-error][UPDATE-KEY-VALUE-ERROR]]. Updated columns are returned and their values assigned to the relevant slots in class <old>. 
 
-Should the updating of multiple records be desired, the restart USE-EXPECTED-VALUE.
+Should the updating of multiple records be desired, the restart USE-EXPECTED-VALUE is proferred.
 
 
 *** Deleting a record:
@@ -252,7 +252,7 @@ TRUNCATE-TABLE, DROP-TABLE and DROP-SCHEMA, all require user confirmation to pro
 
 *** null-key-error
 
-Should the primary keys of the root table be unbound or null during an update or delete operation, an error of NULL-KEY-ERROR is invoked. As deleting / updating multiple rows according to specific column values may well have been the goal of the operation, a restart NOT-AND-ERRO is provided.
+Should the primary keys of the root table be unbound or null during an update or delete operation, an error of NULL-KEY-ERROR is invoked. As deleting / updating multiple rows according to specific column values may well have been the goal of the operation, a restart NOT-AND-ERROR is provided.
 
 
 *** update-key-value-error
