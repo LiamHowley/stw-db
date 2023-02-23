@@ -40,7 +40,7 @@ Connections are made by passing an environment variable to the DB-CONNECT macro,
 
 *** Database parameters file
 
-The database parameter file must contain the name of the database, the USER, PASSWORD and HOST. Optional parameters include PORT, POOLED-P, USE-SSL, USE-BINARY, SERVICE and APPLICATION-NAME. A template file can be found at source. If used it should be moved to a location outside of an application's home directory.
+The database parameter file must contain the name of the database, the USER, PASSWORD and HOST. Optional parameters include PORT, POOLED-P, USE-SSL, USE-BINARY, SERVICE and APPLICATION-NAME. A template file can be found at source.
 
 #+BEGIN_SRC bash
 DATABASE="<db-name>"
