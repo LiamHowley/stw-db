@@ -49,7 +49,6 @@
    :filter-slots-by-type
    :filter-precedents-by-type
    :find-class-precedent
-   :object-to-plist
    :slots-with-values
    :clone-object
    :equality)
