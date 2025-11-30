@@ -139,6 +139,7 @@
    :delete-db-environment
    :connection-params
    :db-connect
+   :*db*
    :connection-pool
    :clear-connection-pool
    :set-connection-limit
@@ -179,7 +180,7 @@
    :drop-schema
    :drop-table
    :truncate-table
-   
+
    ;; utils
 
    ;; syntax
