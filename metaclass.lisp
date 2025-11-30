@@ -42,7 +42,7 @@
     :initform :alist
     :type (or null symbol)
     :documentation "Set requested type for SELECT operations to return. Unless otherwise specified, the type
-set in maps-table will be returned. If multiple columns are mapped the return values will be contained in a 
+set in maps-table will be returned. If multiple columns are mapped the return values will be contained in a
 list and the value EXPRESS-AS-TYPE will apply to the column => value pair. If a single column is mapped the
 value EXPRESS-AS-TYPE will refer to the values container.")
    (constraint
@@ -50,13 +50,13 @@ value EXPRESS-AS-TYPE will refer to the values container.")
     :initform nil
     :type (or null cons)
     :documentation "similar to SET-MAPPED-DEFAULTS constraint references other columns in a
-mapped table. However, CONSTRAINT requires a form, other than a list, e.g. (string= \"value\") or 
+mapped table. However, CONSTRAINT requires a form, other than a list, e.g. (string= \"value\") or
 (> 3). Multiple constraints can be set in the form so that a constraint could reference a number greater than
 and less than. The list will be walked, using INFIX-LIST, setting the appropriate operand and column name")
    (set-mapped-defaults
     :initarg :set-mapped-defaults
     :initform nil :type (or null cons)
-    :documentation "when mapping a column, other columns from the same table may have a fixed value. 
+    :documentation "when mapping a column, other columns from the same table may have a fixed value.
 Set as alist ((COLUMN . VALUE))")))
 
 (defmethod slot-definition-class ((class stw-interface))
@@ -235,50 +235,50 @@ with a single column of type serial."))
     ;; into the nodes foreign-key slot. Backtrace-table and f-key-table
     ;; are used for sorting foreign keys based on mutual dependencies.
     (let* ((backtrace-table)
-	   (precedents (filter-precedents-by-type class 'db-table-class))
-	   (named-precedents (mapcar #'class-name precedents)))
+	         (precedents (filter-precedents-by-type class 'db-table-class))
+	         (named-precedents (mapcar #'class-name precedents)))
       (flet ((collate-keys (table-class)
-	       (loop
-		 for fkey in (slot-value table-class 'foreign-keys)
-		 do (with-slots (ref-table table) fkey
+	             (loop
+		             for fkey in (slot-value table-class 'foreign-keys)
+		             do (with-slots (ref-table table) fkey
 
-		      ;; A table referenced by a foreign key is not necessarily
-		      ;; a precedent of an interface node. Filter accordingly.
-		      (when (member table named-precedents :test #'eq)
-			(aif (assoc table backtrace-table :test #'eq)
-			     (pushnew ref-table (cdr self))
-			     (setf backtrace-table (acons table (list (class-name table-class)) backtrace-table))))))))
-	(loop
-	  for object in precedents
+		                  ;; A table referenced by a foreign key is not necessarily
+		                  ;; a precedent of an interface node. Filter accordingly.
+		                  (when (member table named-precedents :test #'eq)
+			                  (aif (assoc table backtrace-table :test #'eq)
+			                       (pushnew ref-table (cdr self))
+			                       (setf backtrace-table (acons table (list (class-name table-class)) backtrace-table))))))))
+	      (loop
+	        for object in precedents
 
-	  ;; set schema and tables and collate foreign-keys
-	  when (and (string= (slot-value class 'schema) "public")
-		    (slot-value object 'schema))
-	    do (setf (slot-value class 'schema) (slot-value object 'schema))
-	  do (pushnew (class-name object) tables :test #'eq)
-	  do (collate-keys object))
+	        ;; set schema and tables and collate foreign-keys
+	        when (and (string= (slot-value class 'schema) "public")
+		                (slot-value object 'schema))
+	          do (setf (slot-value class 'schema) (slot-value object 'schema))
+	        do (pushnew (class-name object) tables :test #'eq)
+	        do (collate-keys object))
 
-	;; add tables mapped by aggregator slots and push
-	;; mappings to class, table and slot definitions.
-	(loop
-	  for slot in (filter-slots-by-type class 'db-aggregate-slot-definition)
-	  do (with-slots (maps) slot
-	       (with-slots (mapping-node mapped-table mapped-column mapped-columns) maps
-		 (setf mapping-node class)
-		 (pushnew (class-name mapped-table) tables :test #'eq)
-		 (collate-keys mapped-table)
-		 (pushnew maps (slot-value class 'maps) :test #'eq)
-		 (when mapped-column
-		   (pushnew maps (slot-value mapped-column 'mapped-by) :test #'eq))
-		 (pushnew maps (slot-value mapped-table 'mapped-by) :test #'eq)
-		 (loop
-		   for column in mapped-columns
-		   do (pushnew maps (slot-value column 'mapped-by) :test #'eq)))))
-	(let ((sorted-tables (sort-tables backtrace-table)))
-	  (awhen (ensure-bound-tables tables sorted-tables)
-	    (warn "the table(s) ~{~a^ ~} are not bound. They either 
+	      ;; add tables mapped by aggregator slots and push
+	      ;; mappings to class, table and slot definitions.
+	      (loop
+	        for slot in (filter-slots-by-type class 'db-aggregate-slot-definition)
+	        do (with-slots (maps) slot
+	             (with-slots (mapping-node mapped-table mapped-column mapped-columns) maps
+		             (setf mapping-node class)
+		             (pushnew (class-name mapped-table) tables :test #'eq)
+		             (collate-keys mapped-table)
+		             (pushnew maps (slot-value class 'maps) :test #'eq)
+		             (when mapped-column
+		               (pushnew maps (slot-value mapped-column 'mapped-by) :test #'eq))
+		             (pushnew maps (slot-value mapped-table 'mapped-by) :test #'eq)
+		             (loop
+		               for column in mapped-columns
+		               do (pushnew maps (slot-value column 'mapped-by) :test #'eq)))))
+	      (let ((sorted-tables (sort-tables backtrace-table)))
+	        (awhen (ensure-bound-tables tables sorted-tables)
+	          (warn "the table(s) ~{~a^ ~} are not bound. They either
 don't belong in this node or a foreign key is required" self))
-	  (setf tables sorted-tables))))))
+	        (setf tables sorted-tables))))))
 
 
 
@@ -286,38 +286,38 @@ don't belong in this node or a foreign key is required" self))
   :in db-table-layer ((class db) &key)
   (with-slots (schema foreign-keys constraints table) class
     (mapcar #'(lambda (slot)
-		(slot-makunbound class slot))
-	    '(primary-keys require-columns))
+                (slot-makunbound class slot))
+            '(primary-keys require-columns))
     (unless table
       (setf table (funcall *reserved-keywords-filter* (db-syntax-prep (class-name class)))))
     (map-filtered-slots
      class
      #'(lambda (slot) (typep slot 'db-column-slot-definition))
-     #'(lambda (slot) 
-	 (let ((slot-name (slot-definition-name slot))
-	       (to-check))
+     #'(lambda (slot)
+         (let ((slot-name (slot-definition-name slot))
+               (to-check))
 
-	   (with-slots (domain table-class column-name foreign-key col-type check) slot
-	     (setf column-name (funcall *reserved-keywords-filter* (db-syntax-prep slot-name))
-		   (slot-value slot 'table) table
-		   table-class class
-		   domain (funcall *reserved-function/type-filter*
-				   (format nil "~a_~a"
-					   (db-syntax-prep (class-name class))
-					   (db-syntax-prep slot-name)))
-		   (slot-value slot 'schema) schema)
-	     (when foreign-key
-	       (with-slots (ref-table table) foreign-key
-		 (setf ref-table (class-name class))
-		 (unless (member slot-name (mapcar #'key foreign-keys) :test #'eq)
-		   (pushnew foreign-key foreign-keys :test #'eq))))
+	         (with-slots (domain table-class column-name foreign-key col-type check) slot
+	           (setf column-name (funcall *reserved-keywords-filter* (db-syntax-prep slot-name))
+		               (slot-value slot 'table) table
+		               table-class class
+		               domain (funcall *reserved-function/type-filter*
+				                           (format nil "~a_~a"
+					                                 (db-syntax-prep (class-name class))
+					                                 (db-syntax-prep slot-name)))
+		               (slot-value slot 'schema) schema)
+	           (when foreign-key
+	             (with-slots (ref-table table) foreign-key
+		             (setf ref-table (class-name class))
+		             (unless (member slot-name (mapcar #'key foreign-keys) :test #'eq)
+		               (pushnew foreign-key foreign-keys :test #'eq))))
 
-	     ;; check constraints
-	     (when check
-	       (setf (getf to-check :check) check
-		     (getf to-check :col-name) slot-name
-		     (getf to-check :table) table)
-	       (pushnew to-check constraints :test #'equal))))))))
+	           ;; check constraints
+	           (when check
+	             (setf (getf to-check :check) check
+		                 (getf to-check :col-name) slot-name
+		                 (getf to-check :table) table)
+	             (pushnew to-check constraints :test #'equal))))))))
 
 
 
@@ -341,14 +341,14 @@ don't belong in this node or a foreign key is required" self))
 		     (eq col-type :timestamptz))))
     collect slot into require-columns%
     finally (return (setf (slot-value instance 'require-columns) require-columns%))))
-		  
+
 
 (define-layered-function get-root-key (class)
   (:method
       :in db-layer ((class db-wrap))
     (let ((root-table (find-class (car (tables class)))))
 	(slot-value root-table 'primary-keys))))
-  
+
 
 (define-layered-function find-column-slot (class slot-name)
   (:method
@@ -359,7 +359,7 @@ don't belong in this node or a foreign key is required" self))
 	 self)
 	(db-aggregate-slot-definition
 	 (mapped-column (slot-value self 'maps)))))))
-   
+
 
 (defmacro define-db-class (name layer metaclass &body body)
   (unless (serialized-p (car body))
@@ -372,9 +372,9 @@ don't belong in this node or a foreign key is required" self))
 
 
 (defmacro define-key-table (name &body body)
-  "A key table is a single column table with 
+  "A key table is a single column table with
 autoincrementing values, defined as a separate
-type purely for convenience and to enable 
+type purely for convenience and to enable
 dispatching on type."
   (let ((column (ensure-list (cadr body))))
     (setf (getf (cdr column) :col-type) :serial

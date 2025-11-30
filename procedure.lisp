@@ -42,9 +42,9 @@
 Returns a hash table of table name => component."))
 
 (define-layered-function generate-component (class function &key)
-  (:documentation "Creates an instance of component. When function 
-is non nill, a predicate is expected to determine the validity of 
-a foreign key references within the context of the current
+  (:documentation "Creates an instance of component. When function
+is non nill, a predicate is expected to determine the validity of
+foreign key references within the context of the current
 expressions."))
 
 
@@ -143,9 +143,9 @@ of class with updated values.")
 
 
 (define-layered-function set-control (procedure)
-  (:documentation "Returns a control string to be populated with values 
+  (:documentation "Returns a control string to be populated with values
 from an instance of serialize, with which to query a database.")
-  
+
   (:method
       :in db-layer ((procedure procedure))
     (with-slots (schema name p-control p-controls) procedure

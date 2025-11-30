@@ -12,7 +12,7 @@
 		    (drop-schema *schema* t))))))
 
 (define-test live-test)
-  
+
 (define-test params-file...
   :parent live-test
   (princ "Please specify a file with connection params.")

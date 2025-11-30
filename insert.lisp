@@ -7,7 +7,7 @@
   (declare (ignore rest))
   (let ((procedure (call-next-method)))
     (setf (slot-value procedure 'name)
-	  (format nil "~(~a~)_insert" 
+	  (format nil "~(~a~)_insert"
 		  (db-syntax-prep (class-name component))))
     procedure))
 
@@ -83,11 +83,11 @@ Returns a list of tables."
 				  (t t))
 	when include-table
 	  collect table))))
-				
+
 
 
 (define-layered-function slot-to-go (class slot)
-  (:documentation "A column that is set to NOT NULL, has neither a DEFAULT set 
+  (:documentation "A column that is set to NOT NULL, has neither a DEFAULT set
 nor a derived value from a FOREIGN KEY, nor is of type serial, must have a supplied
 value, otherwise an error will be thrown upon inserting. Should SLOT not
 be present in CLASS, SLOT must be mapped and the mapping slot must be present, bound
@@ -158,7 +158,7 @@ and not null. Returns a boolean.")
 			     (declared-var (as-prefix table) slot)))))
       (values
        (class-name class)
-       (make-component 
+       (make-component
 	:sql (format nil "INSERT INTO ~a DEFAULT VALUES RETURNING ~a INTO ~a;"
 		     table-name (set-sql-name table column) (car (var-var declared-var)))
 	:declarations (list declared-var)

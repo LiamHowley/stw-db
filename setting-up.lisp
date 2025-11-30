@@ -44,7 +44,7 @@
       :in db-table-layer ((class db-table-class))
     (with-slots (schema table primary-keys constraints) class
       (princ (format nil "Creating table: ~s in schema: ~s~%" table schema))
-      (format nil "CREATE TABLE IF NOT EXISTS ~a.~a (~{~a~^, ~}~@[, ~a~]~@[, ~{~a~^, ~}~]);" 
+      (format nil "CREATE TABLE IF NOT EXISTS ~a.~a (~{~a~^, ~}~@[, ~a~]~@[, ~{~a~^, ~}~]);"
 	      schema table
 	      (loop for column in (filter-slots-by-type class 'db-column-slot-definition)
 		    collect (clause column))
@@ -79,7 +79,7 @@
   (with-slots (column-name col-type not-null unique) column
     (format nil "~(~a~) ~{~a~}"
 	    column-name
-	    (list 
+	    (list
 	     (format nil "~a" col-type)
 	     (if not-null " NOT NULL" "")
 	     (if (eq unique t) " UNIQUE" "")
@@ -252,7 +252,7 @@ so that differing columns of the same type can be applied to a procedure call.")
 	collect domain)))
 
   (:method
-      :in db-table-layer ((class db-table-class)) 
+      :in db-table-layer ((class db-table-class))
     (with-slots (schema table require-columns) class
       (format nil "~{~a~}"
 	      (let ((columns (filter-slots-by-type class 'db-column-slot-definition)))
@@ -264,7 +264,7 @@ so that differing columns of the same type can be applied to a procedure call.")
 				    domain schema domain (if (eq col-type :serial)
 							     :integer
 							     col-type)))))))))
-    
+
 
 ;;; setting up
 
