@@ -17,9 +17,9 @@
 
 (defun set-sql-name (&rest rest)
   (format nil "~{~a~^.~}"
-	  (mapcan #'(lambda (item)
-		      (list (db-syntax-prep item)))
-		  rest)))
+	        (mapcan #'(lambda (item)
+		                  (list (db-syntax-prep item)))
+		              rest)))
 
 
 (defun date/time-p (input)
@@ -28,12 +28,12 @@
      (date/time-p (symbol-name input)))
     (string
      (some #'identity
-	   (mapcan #'(lambda (col-type)
-		       (let ((mismatch (mismatch (string-downcase input) col-type)))
-			 (if mismatch
-			     (list (eql mismatch (length col-type)))
-			     (list t))))
-		   '("timestamp" "date" "time" "interval"))))))
+	         (mapcan #'(lambda (col-type)
+		                   (let ((mismatch (mismatch (string-downcase input) col-type)))
+			                   (if mismatch
+			                       (list (eql mismatch (length col-type)))
+			                       (list t))))
+		               '("timestamp" "date" "time" "interval"))))))
 
 
 (declaim (inline boolean-value))
@@ -41,15 +41,15 @@
 (defun boolean-value (value)
   (if (numberp value)
       (case integer
-	(1 (values t t))
-	(0 (values t nil))
-	(t (values nil nil)))
+	      (1 (values t t))
+	      (0 (values t nil))
+	      (t (values nil nil)))
       (scase value
-	     (("t" :t t)
-	      (values t t))
-	     (("f" :f nil)
-	      (values t nil))
-	     (t (values nil nil)))))
+	           (("t" :t t)
+	            (values t t))
+	           (("f" :f nil)
+	            (values t nil))
+	           (t (values nil nil)))))
 
 (declaim (inline sql-op))
 
@@ -96,17 +96,17 @@
 (defun infill-column (list column)
   (let ((op (car list)))
     (when (and (member op '(= > < /= >= <=))
-	       (eql (list-length list) 2))
+	             (eql (list-length list) 2))
       (push column (cdr list)))
     (labels ((walk (inner acc)
-	       (if (null inner)
-		   (nreverse acc)
-		   (walk (cdr inner)
-			 (typecase (car inner)
-			   (atom
-			    (cons (car inner) acc))
-			   (cons 
-			    (cons (infill-column (car inner) column) acc)))))))
+	             (if (null inner)
+		               (nreverse acc)
+		               (walk (cdr inner)
+			                   (typecase (car inner)
+			                     (atom
+			                      (cons (car inner) acc))
+			                     (cons 
+			                      (cons (infill-column (car inner) column) acc)))))))
       (walk list nil))))
 
 
@@ -114,50 +114,50 @@
   "Infixing is done in the process of creating a constraint. COLUMN is optional
 but must be provided if not already encoded within LIST."
   (let ((op (or (sql-op (car list))
-		(car list))))
+		            (car list))))
     (cond ((consp op)
-	   (invalid-operator-error "~a is not a valid operator." (car list)))
-	  ((eql (list-length list) 2)
-	   (push (db-syntax-prep column) (cdr list))))
+	         (invalid-operator-error "~a is not a valid operator." (car list)))
+	        ((eql (list-length list) 2)
+	         (push (db-syntax-prep column) (cdr list))))
     (labels ((walk (inner acc)
-	       (if (null inner)
-		   (format nil "~a" (nreverse (butlast acc)))
-		   (walk (cdr inner)
-			 (typecase (car inner)
-			   (string
-			    (cons (if (equal (car inner) (car (last inner)))
-				      (format nil "E'~a'" (car inner))
-				      (format nil "~a" (car inner)))
-				  (push op acc)))
-			   (atom
-			    (cons (car inner) (push op acc)))
-			   (cons 
-			    (cons (infix-constraint (car inner) column) (push op acc))))))))
+	             (if (null inner)
+		               (format nil "~a" (nreverse (butlast acc)))
+		               (walk (cdr inner)
+			                   (typecase (car inner)
+			                     (string
+			                      (cons (if (equal (car inner) (car (last inner)))
+				                              (format nil "E'~a'" (car inner))
+				                              (format nil "~a" (car inner)))
+				                          (push op acc)))
+			                     (atom
+			                      (cons (car inner) (push op acc)))
+			                     (cons
+			                      (cons (infix-constraint (car inner) column) (push op acc))))))))
       (walk (cdr list) nil))))
 
 
 (defun infix-where-clause (list function)
   "Infixing is done in the process of creating a clause."
   (let (positions)
-    (values 
+    (values
      (labels ((walk-outer (list%)
-		(let ((op (or (sql-op (car list%))
-			      (car list%))))
-		  (cond ((consp op)
-			 (invalid-operator-error "~a is not a valid operator." (car list%)))
-			((eql (list-length list%) 2)
-			 (awhen (nth-value 1 (funcall function (cadr list%)))
-			   (push self positions)
-			   (push (format nil "$~a" (1+ self)) (cddr list%)))))
-		  (labels ((walk-inner (inner acc)
-			     (if (null inner)
-				 (format nil "~a" (nreverse (butlast acc)))
-				 (walk-inner (cdr inner)
-					     (aif (when (atom (car inner))
-						    (funcall function (car inner)))
-						  (cons self (push op acc))
-						  (cons (walk-outer (car inner)) (push op acc)))))))
-		    (when list%
-		      (walk-inner (cdr list%) nil))))))
+		            (let ((op (or (sql-op (car list%))
+			                        (car list%))))
+		              (cond ((consp op)
+			                   (invalid-operator-error "~a is not a valid operator." (car list%)))
+			                  ((eql (list-length list%) 2)
+			                   (awhen (nth-value 1 (funcall function (cadr list%)))
+			                     (push self positions)
+			                     (push (format nil "$~a" (1+ self)) (cddr list%)))))
+		              (labels ((walk-inner (inner acc)
+			                       (if (null inner)
+				                         (format nil "~a" (nreverse (butlast acc)))
+				                         (walk-inner (cdr inner)
+					                                   (aif (when (atom (car inner))
+						                                        (funcall function (car inner)))
+						                                      (cons self (push op acc))
+						                                      (cons (walk-outer (car inner)) (push op acc)))))))
+		                (when list%
+		                  (walk-inner (cdr list%) nil))))))
        (walk-outer list))
      positions)))

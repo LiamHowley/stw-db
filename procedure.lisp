@@ -19,11 +19,11 @@
   :in-layer db-layer ((class procedure))
   (with-slots (schema name args vars sql-list sql-statement) class
     (setf sql-statement
-	  (format nil "CREATE OR REPLACE PROCEDURE ~a (~a)~%LANGUAGE plpgsql~%AS $BODY$~%~a~%BEGIN~%~a~%END;~%$BODY$;"
-		  (set-sql-name schema name)
-		  (format nil "~@[~{~{~a~^ ~}~^, ~}~]" args)
-		  (format nil "~@[DECLARE~%~{~{~a ~a~@[ := ~a~];~}~%~}~]" vars)
-		  (format nil "~{~a~^~%~}" sql-list)))
+	        (format nil "CREATE OR REPLACE PROCEDURE ~a (~a)~%LANGUAGE plpgsql~%AS $BODY$~%~a~%BEGIN~%~a~%END;~%$BODY$;"
+		              (set-sql-name schema name)
+		              (format nil "~@[~{~{~a~^ ~}~^, ~}~]" args)
+		              (format nil "~@[DECLARE~%~{~{~a ~a~@[ := ~a~];~}~%~}~]" vars)
+		              (format nil "~{~a~^~%~}" sql-list)))
     class))
 
 
@@ -58,33 +58,33 @@ according to class.")
       :in db-layer ((class db-table-class))
     (wIth-slots (schema table require-columns) class
       (let ((table-name (set-sql-name schema (as-prefix table)))
-	    (control "ARRAY[ ROW (~{~a~^, ~})]::~a_type[]"))
-	(list 
-	 (format nil control
-		 (loop
-		   for slot in require-columns
-		   collect "~a")
-		 table-name)
-	 require-columns))))
+	          (control "ARRAY[ ROW (~{~a~^, ~})]::~a_type[]"))
+	      (list 
+	       (format nil control
+		             (loop
+		               for slot in require-columns
+		               collect "~a")
+		             table-name)
+	       require-columns))))
 
   (:method
       :in db-layer ((map slot-mapping))
     (let ((class (mapped-table map)))
       (wIth-slots (schema table) class
-	(let* ((table-name (set-sql-name schema (as-prefix table)))
-	       (column (ensure-list (slot-value map 'mapped-column)))
-	       (columns (slot-value map 'mapped-columns))
-	       (control (if column
-			    "ARRAY[ ~~{ROW (~{~a~^, ~})~~^, ~~}]::~a_type[]"
-			    "ARRAY[ ~~{ROW (~~{~{~a~^, ~}~~})~~^, ~~}]::~a_type[]"))
-	       (mapped-columns (or column columns)))
-	  (list 
-	   (format nil control
-		   (loop
-		     for slot in mapped-columns
-		     collect "~a")
-		   table-name)
-	   mapped-columns))))))
+	      (let* ((table-name (set-sql-name schema (as-prefix table)))
+	             (column (ensure-list (slot-value map 'mapped-column)))
+	             (columns (slot-value map 'mapped-columns))
+	             (control (if column
+			                      "ARRAY[ ~~{ROW (~{~a~^, ~})~~^, ~~}]::~a_type[]"
+			                      "ARRAY[ ~~{ROW (~~{~{~a~^, ~}~~})~~^, ~~}]::~a_type[]"))
+	             (mapped-columns (or column columns)))
+	        (list 
+	         (format nil control
+		               (loop
+		                 for slot in mapped-columns
+		                 collect "~a")
+		               table-name)
+	         mapped-columns))))))
 
 
 ;;; generating a procedure for insert/delete ops
@@ -95,7 +95,7 @@ a component is an instance of db-table-class or nil. When nil, the function
 generate components is called which returns a hash-table of table name => components
 which are subsequently parsed and aggregated.
 
-When the layered context is update-node, a component is expected to be a cloned copy 
+When the layered context is update-node, a component is expected to be a cloned copy
 of class with updated values.")
 
   (:method
@@ -104,7 +104,7 @@ of class with updated values.")
     (declare (ignore rest))
     (let ((procedure (call-next-method)))
       (with-slots (name) procedure
-	(setf name (funcall *reserved-function/type-filter* name)))
+	      (setf name (funcall *reserved-function/type-filter* name)))
       (set-control procedure)
       (statement procedure)
       procedure))
@@ -113,31 +113,31 @@ of class with updated values.")
       :in-layer db-table-layer ((class serialize) (component db-table-class) &key)
     (with-slots (schema table require-columns) component
       (let ((procedure (make-instance 'procedure
-				      :schema schema
-				      :table class))
-	    (returns)
-	    (mapping-node (match-mapping-node (class-of class) component)))
-	(with-slots (args vars sql-list p-controls relevant-slots) procedure
-	  (let ((component (generate-component (or mapping-node component) (constantly t))))
-	    (with-slots (sql params param-controls declarations) component
-	      (loop
-		for declaration in declarations
-		for var = (var-var declaration)
-		collect (var-param declaration) into params%
-		collect var into vars%
-		collect (format nil "~a := ~a;" (var-column declaration) (car var)) into returns%
-		finally (setf vars vars%
-			      params (nconc params params%)
-			      returns returns%))
-	      (setf sql-list `(,(apply #'format nil sql
-				       (loop
-					 for i from 1 to (length params)
-					 collect i))
-			       ,@returns)
-		    args params
-		    p-controls param-controls
-		    relevant-slots (get-relevant-slots class procedure)))))
-	procedure))))
+				                              :schema schema
+				                              :table class))
+	          (returns)
+	          (mapping-node (match-mapping-node (class-of class) component)))
+	      (with-slots (args vars sql-list p-controls relevant-slots) procedure
+	        (let ((component (generate-component (or mapping-node component) (constantly t))))
+	          (with-slots (sql params param-controls declarations) component
+	            (loop
+		            for declaration in declarations
+		            for var = (var-var declaration)
+		            collect (var-param declaration) into params%
+		            collect var into vars%
+		            collect (format nil "~a := ~a;" (var-column declaration) (car var)) into returns%
+		            finally (setf vars vars%
+			                        params (nconc params params%)
+			                        returns returns%))
+	            (setf sql-list `(,(apply #'format nil sql
+				                               (loop
+					                               for i from 1 to (length params)
+					                               collect i))
+			                         ,@returns)
+		                args params
+		                p-controls param-controls
+		                relevant-slots (get-relevant-slots class procedure)))))
+	      procedure))))
 
 
 
@@ -150,12 +150,12 @@ from an instance of serialize, with which to query a database.")
       :in db-layer ((procedure procedure))
     (with-slots (schema name p-control p-controls) procedure
       (setf p-control (format nil "CALL ~a.~a (~@[~{~a~^, ~}~])"
-			      schema name (mapcar #'(lambda (control)
-						      (cond ((and control (car control))
-							     (car control))
-							    (control "~a")
-							    (t "null")))
-						  p-controls))))))
+			                        schema name (mapcar #'(lambda (control)
+						                                          (cond ((and control (car control))
+							                                               (car control))
+							                                              (control "~a")
+							                                              (t "null")))
+						                                      p-controls))))))
 
 
 
@@ -165,19 +165,19 @@ from an instance of serialize, with which to query a database.")
       :in db-layer ((class serialize) (proc procedure))
     (with-slots (p-controls) proc
       (mapcar #'(lambda (control)
-		  (when control
-		    (if (consp (cadr control))
-			(loop
-			  for slot in (cadr control)
-			  for mapped-by = (match-mapping-node (class-of class) slot)
-			  if mapped-by
-			    do (return (list (slot-value mapped-by 'mapping-slot)))
-			  else
-			    collect slot)
-			(aif (slot-value (cadr control) 'mapped-by)
-			     (loop
-			       for mapping in self
-			       when (typep class (slot-value mapping 'mapping-node))
-				 do (return (mapping-slot mapping)))
-			     (cadr control)))))
-	      p-controls))))
+		              (when control
+		                (if (consp (cadr control))
+			                  (loop
+			                    for slot in (cadr control)
+			                    for mapped-by = (match-mapping-node (class-of class) slot)
+			                    if mapped-by
+			                      do (return (list (slot-value mapped-by 'mapping-slot)))
+			                    else
+			                      collect slot)
+			                  (aif (slot-value (cadr control) 'mapped-by)
+			                       (loop
+			                         for mapping in self
+			                         when (typep class (slot-value mapping 'mapping-node))
+				                         do (return (mapping-slot mapping)))
+			                       (cadr control)))))
+	            p-controls))))

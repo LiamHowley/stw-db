@@ -129,24 +129,24 @@ with a single column of type serial."))
 
 
 (define-layered-method initialize-in-context
-  :in db-interface-layer ((slot db-aggregate-slot-definition) 
-			  &key maps-table maps-column maps-columns type)
+  :in db-interface-layer ((slot db-aggregate-slot-definition)
+			                    &key maps-table maps-column maps-columns type)
   (with-slots (maps) slot
     (setf (slot-definition-type slot)
-	  (or type
-	      (when (typep type 'boolean)
-		'list)))
+	        (or type
+	            (when (typep type 'boolean)
+		            'list)))
     (when maps-table
       (unless (find-class maps-table)
-	(error "the table ~a specified in maps-table does not exist" maps-table))
+	      (error "the table ~a specified in maps-table does not exist" maps-table))
       (unless (or maps-column maps-columns)
-	(warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a." (slot-definition-name slot)))
+	      (warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a." (slot-definition-name slot)))
       (setf maps (make-slot-mapping 
-		  :mapping-slot slot
-		  :mapped-table (find-class maps-table)
-		  :mapped-column (find-slot-definition maps-table maps-column 'db-column-slot-definition)
-		  :mapped-columns (loop for column in maps-columns
-					collect (find-slot-definition maps-table column 'db-column-slot-definition)))))))
+		              :mapping-slot slot
+		              :mapped-table (find-class maps-table)
+		              :mapped-column (find-slot-definition maps-table maps-column 'db-column-slot-definition)
+		              :mapped-columns (loop for column in maps-columns
+					                              collect (find-slot-definition maps-table column 'db-column-slot-definition)))))))
 
 
 (define-layered-class foreign-key
@@ -170,37 +170,37 @@ with a single column of type serial."))
   (unless ref-schema
     (setf (slot-value class 'ref-schema) (slot-value class 'schema)))
   (flet ((on-action (action)
-	   (when action
-	     (unless (member action '(:restrict :cascade :no-action :set-null :set-default))
-	       (error "~a is not a keyword. Accepted values include :RESTRICT :CASCADE :NO-ACTION :SET-NULL :SET-DEFAULT"
-		      action)))))
+	         (when action
+	           (unless (member action '(:restrict :cascade :no-action :set-null :set-default))
+	             (error "~a is not a keyword. Accepted values include :RESTRICT :CASCADE :NO-ACTION :SET-NULL :SET-DEFAULT"
+		                  action)))))
     (on-action on-update)
     (on-action on-delete)))
 
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((slot db-column-slot-definition)
-		      &key default col-type check primary-key foreign-key &allow-other-keys)
+		                  &key default col-type check primary-key foreign-key &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
     (when (eq col-type 'serial)
       (setf (slot-value slot 'lock-value) t))
     (flet ((set-not-null ()
-	     (unless (eq col-type 'serial)
-	       (setf (slot-value slot 'not-null) t))))
+	           (unless (eq col-type 'serial)
+	             (setf (slot-value slot 'not-null) t))))
       (when primary-key
-	(set-not-null)))
+	      (set-not-null)))
     (when check
       (setf (slot-value slot 'check)
-	    (infill-column check slot-name)))
+	          (infill-column check slot-name)))
     (when foreign-key
       (let ((schema (getf foreign-key :schema)))
-	(let ((f-key (apply #'make-instance 'foreign-key
-			    :schema schema
-			    :ref-schema (or (getf foreign-key :ref-schema)
-					    schema)
-			    :key slot-name
-			    foreign-key)))
-	  (setf (slot-value slot 'foreign-key) f-key))))))
+	      (let ((f-key (apply #'make-instance 'foreign-key
+			                      :schema schema
+			                      :ref-schema (or (getf foreign-key :ref-schema)
+					                                  schema)
+			                      :key slot-name
+			                      foreign-key)))
+	        (setf (slot-value slot 'foreign-key) f-key))))))
 
 
 
@@ -208,14 +208,14 @@ with a single column of type serial."))
   (let ((acc))
     (map-tree-depth-first
      #'(lambda (item)
-	 (cond ((member item acc)
-		nil)
-	       (t (push item acc)
-		  item)))
+	       (cond ((member item acc)
+		            nil)
+	             (t (push item acc)
+		              item)))
      (nreverse
       (sort backtrace-alist
-	    #'(lambda (a b)
-		(member (car a) (cdr b) :test #'eq))))
+	          #'(lambda (a b)
+		            (member (car a) (cdr b) :test #'eq))))
      t)))
 
 
@@ -336,10 +336,10 @@ don't belong in this node or a foreign key is required" self))
     when (and foreign-key (slot-value foreign-key 'no-join))
       collect slot into require-columns%
     unless (or foreign-key
-	       (let ((col-type (slot-value slot 'col-type)))
-		 (or (eq col-type :serial)
-		     (eq col-type :timestamptz))))
-    collect slot into require-columns%
+	             (let ((col-type (slot-value slot 'col-type)))
+		             (or (eq col-type :serial)
+		                 (eq col-type :timestamptz))))
+      collect slot into require-columns%
     finally (return (setf (slot-value instance 'require-columns) require-columns%))))
 
 
@@ -347,7 +347,7 @@ don't belong in this node or a foreign key is required" self))
   (:method
       :in db-layer ((class db-wrap))
     (let ((root-table (find-class (car (tables class)))))
-	(slot-value root-table 'primary-keys))))
+      (slot-value root-table 'primary-keys))))
 
 
 (define-layered-function find-column-slot (class slot-name)
@@ -355,10 +355,10 @@ don't belong in this node or a foreign key is required" self))
       :in db-layer ((class db-interface-class) slot-name)
     (awhen (find-slot-definition class slot-name 'db-base-column-definition)
       (typecase self
-	(db-column-slot-definition
-	 self)
-	(db-aggregate-slot-definition
-	 (mapped-column (slot-value self 'maps)))))))
+	      (db-column-slot-definition
+	       self)
+	      (db-aggregate-slot-definition
+	       (mapped-column (slot-value self 'maps)))))))
 
 
 (defmacro define-db-class (name layer metaclass &body body)
@@ -378,11 +378,15 @@ type purely for convenience and to enable
 dispatching on type."
   (let ((column (ensure-list (cadr body))))
     (setf (getf (cdr column) :col-type) :serial
-	  (getf (cdr column) :primary-key) t
-	  (cadr body) (list column))
+	        (getf (cdr column) :primary-key) t
+	        (cadr body) (list column))
     `(define-db-class ,name db-table-layer db-key-table
        ,@body)))
 
+
+(defmacro define-root-table (name &body body)
+  `(define-db-class ,name db-table-layer db-root-table
+     ,@body))
 
 (defmacro define-db-table (name &body body)
   `(define-db-class ,name db-table-layer db-table-class
@@ -390,13 +394,13 @@ dispatching on type."
 
 (defmacro define-interface-node (name &body body)
   (let ((metaclass
-	  (aif (cddr body)
-	       (aif (assoc :metaclass self)
-		    (prog1
-			(cadr self)
-		      (setf (cddr body) (delete self (cddr body))))
-		    'db-interface-class)
-	       'db-interface-class)))
+	        (aif (cddr body)
+	             (aif (assoc :metaclass self)
+		                (prog1
+			                  (cadr self)
+		                  (setf (cddr body) (delete self (cddr body))))
+		                'db-interface-class)
+	             'db-interface-class)))
     `(define-db-class ,name db-interface-layer ,metaclass
        ,@body)))
 

@@ -79,25 +79,25 @@
   (with-slots (column-name col-type not-null unique) column
     (format nil "~(~a~) ~{~a~}"
 	    column-name
-	    (list
-	     (format nil "~a" col-type)
-	     (if not-null " NOT NULL" "")
-	     (if (eq unique t) " UNIQUE" "")
-	     (if (slot-boundp column 'default)
-		 (let ((default (slot-value column 'default)))
-		   (typecase default
-		     (cons
-		      (format nil " DEFAULT ~a(~@[~{~a~^, ~}~])" (car default) (cdr default)))
-		     (integer
-		      (format nil " DEFAULT ~a" default))
-		     (string
-		      (format nil " DEFAULT '~a'" default))
-		     (boolean
-		      (if (eq col-type :boolean)
-			  (format nil " DEFAULT '~a'" (if (eq default t) "t" "f"))
-			  ""))
-		     (t "")))
-		 "")))))
+      (list
+       (format nil "~a" col-type)
+       (if not-null " NOT NULL" "")
+       (if (eq unique t) " UNIQUE" "")
+       (if (slot-boundp column 'default)
+           (let ((default (slot-value column 'default)))
+             (typecase default
+               (cons
+                (format nil " DEFAULT ~a(~@[~{~a~^, ~}~])" (car default) (cdr default)))
+               (integer
+                (format nil " DEFAULT ~a" default))
+               (string
+                (format nil " DEFAULT '~a'" default))
+               (boolean
+                (if (eq col-type :boolean)
+                    (format nil " DEFAULT '~a'" (if (eq default t) "t" "f"))
+                    ""))
+               (t "")))
+           "")))))
 
 
 (define-layered-method clause

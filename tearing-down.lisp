@@ -24,7 +24,7 @@
       (restart-case
 	  (exec-query *db* (format nil "DROP SCHEMA IF EXISTS ~(~a~)~@[ cascade~]" schema cascade))
 	(cascade () (drop-schema schema t))))))
-	  
+
 
 
 ;;; tables
