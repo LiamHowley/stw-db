@@ -112,10 +112,15 @@ Set as alist ((COLUMN . VALUE))")))
 (define-layered-class db-key-table
   :in-layer db-table-layer (db-table-class)
   ()
-  (:documentation "Specialised type for tables 
+  (:documentation "Specialised type for tables
 with a single column of type serial."))
 
-
+(define-layered-class db-root-table
+  :in-layer db-table-layer (db-table-class)
+  ()
+  (:documentation "Specialised type for tables containing primary
+key column(s) that may be referred to by foreign keys of other tables
+but are not themselves foreign keys."))
 
 
 ;;;;;;; Initialization Methods

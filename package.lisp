@@ -119,11 +119,13 @@
   (:export
    :define-db-table
    :define-key-table
+   :define-root-table
    :define-interface-node
 
    :db-interface-class
    :db-table-class
    :db-key-table
+   :db-root-table
 
    :db-layer
    :db-interface-layer

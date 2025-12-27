@@ -87,12 +87,18 @@ Inheriting from DB-TABLE-LAYER is INSERT-TABLE and DELETE-TABLE. Inheriting from
 
 ** Table Definitions
 
-Three macros are provided for database table definitions: DEFINE-KEY-TABLE, DEFINE-DB-TABLE and DEFINE-INTERFACE-NODE.
+Four macros are provided for database table definitions: DEFINE-KEY-TABLE, DEFINE-ROOT-TABLE, DEFINE-DB-TABLE and DEFINE-INTERFACE-NODE.
 
-DEFINE-KEY-TABLE defines a key table of type DB-KEY-TABLE in the DB-TABLE-LAYER context. It is a singleton, and has the sole purpose of defining a single column table of autoincrementing values.
+DEFINE-KEY-TABLE defines a key table of type DB-KEY-TABLE in the DB-TABLE-LAYER context. It is a singleton, and has the sole purpose of defining a single column table of autoincrementing values. Likewise, DEFINE-ROOT-TABLE defines a table of type DB-ROOT-TABLE in the DB-TABLE-LAYER context. Both DB-KEY-TABLE and DB-ROOT-TABLE inherit from DB-TABLE-CLASS, and serve the purpose of providing a root table class for dispatching purposes. But whereas a KEY-TABLE is a table of only one autoincrementing column, a ROOT-TABLE is a table where input values are required to populate a row. The concept of a root table is discussed further below at [[Root table and the root key]].
 
 #+BEGIN_SRC lisp
-(define-key-table user-base () id)
+  (define-key-table user-base () id)
+
+  (define-root-table account-base
+      ((account-id :primary-key t
+                   :col-type integer)
+       (account-name :col-type text
+                     :not-null t)))
 #+END_SRC
 
 

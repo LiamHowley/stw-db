@@ -432,121 +432,145 @@
 
 
 (define-layered-method generate-component
-  :in retrieve-node ((class db-key-table) function &key join-to slot-value-p)
-  (declare (ignore function))
-  (with-slots (schema table) class
-    (let* ((slot (car (filter-slots-by-type class 'db-column-slot-definition)))
-	   (table-name (set-sql-name schema table))
-	   (col-name (column-name slot)))
-      (values
-       (class-name class)
-       (make-select-component
-	:columns (list (set-sql-name table-name col-name))
-	:from table-name
-	:where (when join-to
-		 (awhen (funcall join-to (slot-definition-name slot))
-		   (list (set-sql-name self col-name) := (set-sql-name table col-name)))))
-       (list (return-var slot))))))
-
-
-(define-layered-method generate-component
   :in retrieve-node
   ((class slot-mapping) (f-key-p function)
    &key join-to (join-type :inner) slot-value-p)
   (let* ((join (make-instance 'join :join-type join-type))
-	 (mapped-table (mapped-table class))
-	 (mapped-column (mapped-column class))
-	 (mapped-columns (mapped-columns class))
-	 (mapping-slot% (mapping-slot class))
-	 (mapping-slot (db-syntax-prep (slot-definition-name mapping-slot%)))
-	 (schema (schema mapped-table))
-	 (slots (filter-slots-by-type mapped-table 'db-column-slot-definition))
-	 (table-name (set-sql-name schema (table mapped-table)))
-	 (f-keys)
-	 (columns (loop
-		    with collected-slots = nil
-		    for slot in slots
-		    for f-key = (slot-value slot 'foreign-key)
-		    for column = (cond ((eq slot mapped-column)
-					mapping-slot)
-				       ((member slot mapped-columns :test #'eq)
-					(unless (member mapping-slot collected-slots :test #'eq)
-					  (push mapping-slot collected-slots)
-					  mapping-slot))
-				       (t (column-name slot)))
-		    if (and f-key (funcall f-key-p f-key))
-		      do (push f-key f-keys)
-		    else
-		      when column
-			collect (set-sql-name mapping-slot column)))
-	 (last-key)
-	 (table-clause))
+	       (mapped-table (mapped-table class))
+	       (mapped-column (mapped-column class))
+	       (mapped-columns (mapped-columns class))
+	       (mapping-slot% (mapping-slot class))
+	       (mapping-slot (db-syntax-prep (slot-definition-name mapping-slot%)))
+	       (schema (schema mapped-table))
+	       (slots (filter-slots-by-type mapped-table 'db-column-slot-definition))
+	       (table-name (set-sql-name schema (table mapped-table)))
+	       (f-keys)
+	       (columns (loop
+		                with collected-slots = nil
+		                for slot in slots
+		                for f-key = (slot-value slot 'foreign-key)
+		                for column = (cond ((eq slot mapped-column)
+					                              mapping-slot)
+				                               ((member slot mapped-columns :test #'eq)
+					                              (unless (member mapping-slot collected-slots :test #'eq)
+					                                (push mapping-slot collected-slots)
+					                                mapping-slot))
+				                               (t (column-name slot)))
+		                if (and f-key (funcall f-key-p f-key))
+		                  do (push f-key f-keys)
+		                else
+		                  when column
+			                  collect (set-sql-name mapping-slot column)))
+	       (last-key)
+	       (table-clause))
 
-    ;; When values are bound to mapping slot in class mapping-node 
+    ;; When values are bound to mapping slot in class mapping-node
     ;; and mapped-table is not invoked in a union subquery,
     ;; any retrieved records must validate against at least one of
-    ;; of the supplied values. 
+    ;; of the supplied values.
     (when (funcall slot-value-p mapping-slot%)
       (let ((group-by (mapcar #'(lambda (f-key)
-				  (set-sql-name table-name (slot-value f-key 'key)))
-			      f-keys)))
-	(setf last-key (concatenate 'string (db-syntax-prep mapping-slot) "_key"))
-	(with-slots (table on) join
-	  (setf table (clause
-		       (make-instance 'agg
-				      :alias last-key
-				      :from table-name
-				      :group-by group-by
-				      :where (wherep mapping-slot% slot-value-p)))
-		on (loop
-		     for f-key in f-keys
-		     for key = (slot-value f-key 'key)
-		     for self = (funcall join-to key)
-		     when self
-		       collect `(,(set-sql-name self key)
-				 ,(set-sql-name last-key key)))
-		table-clause (clause join)))))
+				                          (set-sql-name table-name (slot-value f-key 'key)))
+			                        f-keys)))
+	      (setf last-key (concatenate 'string (db-syntax-prep mapping-slot) "_key"))
+	      (with-slots (table on) join
+	        (setf table (clause
+		                   (make-instance 'agg
+				                              :alias last-key
+				                              :from table-name
+				                              :group-by group-by
+				                              :where (wherep mapping-slot% slot-value-p)))
+		            on (loop
+		                 for f-key in f-keys
+		                 for key = (slot-value f-key 'key)
+		                 for self = (funcall join-to key)
+		                 when self
+		                   collect `(,(set-sql-name self key)
+				                         ,(set-sql-name last-key key)))
+		            table-clause (clause join)))))
 
     (with-slots (table on) join
-      (setf table 
-	    (clause
-	     (cond (mapped-column
-		    (make-instance 'array-agg
-				   :alias mapping-slot
-				   :from table-name
-				   :col-names (ensure-list (set-sql-name table-name (slot-definition-name mapped-column)))
-				   :group-by (mapcan #'(lambda (slot)
-							 (unless (eq slot mapped-column)
-							   (list (set-sql-name table-name (column-name slot)))))
-						     slots)))
-		   (mapped-columns
-		    (make-instance 'json-agg
-				   :alias mapping-slot
-				   :from table-name
-				   :col-names (mapcar #'(lambda (column)
-							  (set-sql-name table-name (column-name column)))
-						      mapped-columns)
-				   :group-by (mapcan #'(lambda (slot)
-							 (unless (member slot mapped-columns :test #'eq)
-							   (list (set-sql-name table-name (column-name slot)))))
-						     slots)))))
-	    on (loop
-		 for f-key in f-keys
-		 for key = (slot-value f-key 'key)
-		 for self = (if table-clause
-				last-key
-				(funcall join-to key))
-		 collect `(,(set-sql-name self key)
-			   ,(set-sql-name mapping-slot key))))
+      (setf table
+	          (clause
+	           (cond (mapped-column
+		                (make-instance 'array-agg
+				                           :alias mapping-slot
+				                           :from table-name
+				                           :col-names (ensure-list (set-sql-name table-name (slot-definition-name mapped-column)))
+				                           :group-by (mapcan #'(lambda (slot)
+							                                           (unless (eq slot mapped-column)
+							                                             (list (set-sql-name table-name (column-name slot)))))
+						                                         slots)))
+		               (mapped-columns
+		                (make-instance 'json-agg
+				                           :alias mapping-slot
+				                           :from table-name
+				                           :col-names (mapcar #'(lambda (column)
+							                                            (set-sql-name table-name (column-name column)))
+						                                          mapped-columns)
+				                           :group-by (mapcan #'(lambda (slot)
+							                                           (unless (member slot mapped-columns :test #'eq)
+							                                             (list (set-sql-name table-name (column-name slot)))))
+						                                         slots)))))
+	          on (loop
+		             for f-key in f-keys
+		             for key = (slot-value f-key 'key)
+		             for self = (if table-clause
+				                        last-key
+				                        (funcall join-to key))
+		             collect `(,(set-sql-name self key)
+			                     ,(set-sql-name mapping-slot key))))
       (values
        (class-name mapped-table)
        (make-select-component
-	:alias mapping-slot
-	:columns columns
-	:join (if table-clause
-		  (concatenate 'string table-clause " " (clause join))
-		  (clause join)))
+	      :alias mapping-slot
+	      :columns columns
+	      :join (if table-clause
+		              (concatenate 'string table-clause " " (clause join))
+		              (clause join)))
        (list (return-var (mapping-slot class)))))))
+
+
+
+(define-layered-method generate-component
+  :in retrieve-node ((class db-key-table) function &key join-to)
+  (declare (ignore function))
+  (with-slots (schema table) class
+    (let* ((slot (car (filter-slots-by-type class 'db-column-slot-definition)))
+	         (table-name (set-sql-name schema table))
+	         (col-name (column-name slot)))
+      (values
+       (class-name class)
+       (make-select-component
+	      :columns (list (set-sql-name table-name col-name))
+	      :from table-name
+	      :where (when join-to
+		             (awhen (funcall join-to (slot-definition-name slot))
+		               (list (set-sql-name self col-name) := (set-sql-name table col-name)))))
+       (list (return-var slot))))))
+
+
+
+(define-layered-method generate-component
+  :in retrieve-node ((class db-root-table) function &key join-to)
+  (declare (ignore function))
+  (with-slots (schema table) class
+    (let* ((slots (filter-slots-by-type class 'db-column-slot-definition))
+           (root-column)
+           (table-name (set-sql-name schema table))
+           (columns (loop for slot in slots
+                          do (when (slot-value slot 'primary-key)
+                               (setf root-column slot))
+                          collect (set-sql-name table-name (column-name slot)))))
+      (values
+       (class-name class)
+       (make-select-component
+	      :columns columns
+	      :from table-name
+	      :where (when join-to
+		             (awhen (funcall join-to (slot-definition-name root-column))
+		               (list (set-sql-name self root-column) := (set-sql-name table root-column)))))
+       (mapcar #'return-var slots)))))
 
 
 
@@ -555,94 +579,95 @@
   (declare (ignore slot-value-p))
   (with-slots (schema table) class
     (let* ((slots (filter-slots-by-type class 'db-column-slot-definition))
-	   (table-name (set-sql-name schema table))
-	   (f-keys)
-	   (join (make-instance 'join :join-type join-type)))
+	         (table-name (set-sql-name schema table))
+	         (f-keys)
+	         (join (make-instance 'join :join-type join-type)))
       (multiple-value-bind (columns returns)
-	  (loop
-	    for slot in slots
-	    for f-key = (slot-value slot 'foreign-key)
-	    if (and f-key (funcall f-key-p f-key))
-	      do (push f-key f-keys)
-	    else
-	      collect (set-sql-name table-name (column-name slot)) into columns%
-	      and collect (return-var slot) into returns%
-	    finally (return (values columns% returns%)))
-	(with-slots (table on) join
-	  (setf table table-name
-		on (loop
-		     for f-key in f-keys
-		     for key = (slot-value f-key 'key)
-		     for self = (funcall join-to key)
-		     when self
-		     collect `(,(set-sql-name self key)
-			       ,(set-sql-name table-name key)))))
-	(values
-	 (class-name class)
-	 (make-select-component
-	  :columns columns
-	  :join (clause join))
-	 returns)))))
+	        (loop
+	          for slot in slots
+	          for f-key = (slot-value slot 'foreign-key)
+	          if (and f-key (funcall f-key-p f-key))
+	            do (push f-key f-keys)
+	          else
+	            collect (set-sql-name table-name (column-name slot)) into columns%
+	            and collect (return-var slot) into returns%
+	          finally (return (values columns% returns%)))
+          (with-slots (table on) join
+            (setf table table-name
+                  on (loop
+                       for f-key in f-keys
+                       for key = (slot-value f-key 'key)
+                       for self = (funcall join-to key)
+                       when self
+                         collect `(,(set-sql-name self key)
+                                   ,(set-sql-name table-name key)))))
+	      (values
+	       (class-name class)
+	       (make-select-component
+	        :columns columns
+	        :join (clause join))
+	       returns)))))
 
 
 (define-layered-method clause
   :in retrieve-node ((this join))
   (with-slots (join-type table on) this
     (format nil "~a JOIN ~a~@[ ON (~{~{~a = ~a~}~^ AND ~})~]"
-	    join-type table on)))
+	          join-type table on)))
 
 
 (define-layered-method clause
   :in retrieve-node ((this union-query))
   (with-slots (queries alias) this
     (setf queries (format nil "(~{(~a)~^ UNION ~})~@[ ~a~]"
-			  queries alias))))
+			                    queries alias))))
 
 
 (define-layered-method clause
   :in retrieve-node ((this union-all-query))
   (with-slots (queries alias) this
     (setf queries (format nil "(~{(~a)~^ UNION ALL ~})~@[ ~a~]"
-			  queries alias))))
+			                    queries alias))))
 
 
 (define-layered-method clause
   :in retrieve-node ((this agg))
   (with-slots (from group-by alias where) this
     (format nil "((SELECT ~{~a~^, ~} FROM ~a~@[ WHERE ~a~] GROUP BY ~{~a~^, ~})) ~a"
-	    group-by from where group-by alias)))
+	          group-by from where group-by alias)))
 
 
 (define-layered-method clause
   :in retrieve-node ((this array-agg))
   (with-slots (col-names from group-by alias where) this
     (format nil "((SELECT ARRAY_AGG(~a) AS ~a, ~{~a~^, ~} FROM ~a~@[ WHERE ~{~a~^ AND~}~] GROUP BY ~{~a~^, ~})) ~a"
-	    col-names alias group-by from where group-by alias)))
+	          col-names alias group-by from where group-by alias)))
 
 
 (define-layered-method clause
   :in db-interface-layer ((this json-agg))
   (with-slots (col-names from group-by alias where) this
     (format nil "((SELECT JSON_AGG(JSON_BUILD_ARRAY(~{~a~^, ~})) AS ~a, ~{~a~^, ~} FROM ~{~a~^, ~}~@[ WHERE ~{~a~^ AND~}~] GROUP BY ~{~a~^, ~})) ~a"
-	    col-names alias group-by (ensure-list from) where group-by alias)))
+	          col-names alias group-by (ensure-list from) where group-by alias)))
 
 
 (define-layered-method statement
   :in retrieve-node ((this select))
   (with-slots (col-names from joins where group-by having% order-by limit) this
+    ;;(print where)
     (when (and col-names from)
       (format nil "SELECT ~{~a~^, ~} FROM ~{~a~^, ~}~@[ ~{~a~^ ~}~]~@[~{~a~^~}~]"
-	      col-names
-	      (ensure-list from)
-	      joins
-	      (list (format nil "~@[ GROUP BY ~{~a~^, ~}~]" (ensure-list group-by))
-		    (format nil "~@[ WHERE ~{~a~^ AND ~}~]" where)
-		    (format nil "~@[ ORDER BY ~{~a~^, ~}~]"
-			    (loop for order in (ensure-list order-by)
-				  collect (format nil (typecase order
-							(atom
-							 "~a")
-							(cons
-							 "~{~a ~a~}"))
-						  order)))
-		    (format nil "~@[ LIMIT ~a~]" limit))))))
+	            col-names
+	            (ensure-list from)
+	            joins
+	            (list (format nil "~@[ GROUP BY ~{~a~^, ~}~]" (ensure-list group-by))
+		                (format nil "~@[ WHERE ~{~a~^ AND ~}~]" where)
+		                (format nil "~@[ ORDER BY ~{~a~^, ~}~]"
+			                      (loop for order in (ensure-list order-by)
+				                          collect (format nil (typecase order
+							                                          (atom
+							                                           "~a")
+							                                          (cons
+							                                           "~{~a ~a~}"))
+						                                      order)))
+		                (format nil "~@[ LIMIT ~a~]" limit))))))
