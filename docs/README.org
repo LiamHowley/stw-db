@@ -147,9 +147,9 @@ A table class is also a singleton, and maps directly to a database table/relatio
 
 *** DB-INTERFACE-NODE
 
-DEFINE-INTERFACE-NODE defines a layered class of type DB-INTERFACE-CLASS. An interface node inherits slots from one or more table classes, and can in turn be inherited itself. All directly defined slots of DB-INTERFACE-CLASS are of the type DB-AGGREGATE-SLOT-DEFINITION and are used as the mapping slots aggregating the multiple values of a one to many relation. 
+DEFINE-INTERFACE-NODE defines a layered class of type DB-INTERFACE-CLASS. An interface node inherits slots from one or more table classes, and can in turn be inherited itself. All directly defined slots of DB-INTERFACE-CLASS are of the type DB-AGGREGATE-SLOT-DEFINITION and are used as the mapping slots aggregating the multiple values of a one to many relation.
 
-**** Mapping a single column 
+**** Mapping a single column
 
 To map a single column, DB-AGGREGATE-SLOT-DEFINITIION contains the initargs :maps-table and :maps-column. The initarg :maps-table requires the name, (a symbol), of a DB-TABLE-CLASS definition, while :maps-column requires the name, (also a symbol), of a slot of type DB-COLUMN-SLOT-DEFINITION of the same table class. As the result is expected to be a collection of values, the return type is determined by the slot-definition-type of the mapping slot, (i.e. the initarg :type), which defaults to list.
 
@@ -273,8 +273,7 @@ The restart not-an-error mimics the behaviour of the continue restart, and can b
 
 *** use-expected-value
 
-The purpose of providing a USE-EXPECTED-VALUE restart is to update varied objects of the same class type but with fixed values and under specific circumstances, (e.g. updating from a template or resetting to some default state). As an error is called and the restart invoked, the error value is amended to the slot EXPECTED-VALUE so that the process of updating the node can continue as before. However, unless the respective key values are expected to differ, this restart should be approached with caution. The root keys of a node should match. That they do not match must 
-be deliberate and should not occur carelessly.
+The purpose of providing a USE-EXPECTED-VALUE restart is to update varied objects of the same class type but with fixed values and under specific circumstances, (e.g. updating from a template or resetting to some default state). As an error is called and the restart invoked, the error value is amended to the slot EXPECTED-VALUE so that the process of updating the node can continue as before. However, unless the respective key values are expected to differ, this restart should be approached with caution. The root keys of a node should match. That they do not match must be deliberate and should not occur carelessly.
 
 
 
