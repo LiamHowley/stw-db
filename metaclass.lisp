@@ -96,7 +96,8 @@ Set as alist ((COLUMN . VALUE))")))
    (value :initarg :value :initform nil)
    (mapped-by :initform nil :reader mapped-by)
    (column-name :reader column-name)
-   (lock-value :initarg :lock-value :initform nil :reader lock-value)))
+   (lock-value :initarg :lock-value :initform nil :reader lock-value)
+   (enumerated :initarg :enumerated-values :initform nil :type array)))
 
 
 
@@ -146,7 +147,7 @@ but are not themselves foreign keys."))
 	      (error "the table ~a specified in maps-table does not exist" maps-table))
       (unless (or maps-column maps-columns)
 	      (warn "No value set for MAPS-COLUMNS or MAPS-COLUMN for slot ~a." (slot-definition-name slot)))
-      (setf maps (make-slot-mapping 
+      (setf maps (make-slot-mapping
 		              :mapping-slot slot
 		              :mapped-table (find-class maps-table)
 		              :mapped-column (find-slot-definition maps-table maps-column 'db-column-slot-definition)
@@ -167,6 +168,13 @@ but are not themselves foreign keys."))
    (no-join :initarg :no-join :initform nil :type boolean :reader no-join)))
 
 
+(define-layered-class enumerated-type
+  :in-layer db-table-layer ()
+  ((schema :initarg :schema)
+   (column :initarg :column)
+   (values :initarg :values :reader enum-values)))
+
+
 (defmethod shared-initialize :after ((class foreign-key) slot-names &rest initargs &key table column schema ref-schema on-update on-delete)
   (unless (and table column)
     (error "Foreign key plist must contain both :TABLE and :COLUMN params"))
@@ -185,18 +193,26 @@ but are not themselves foreign keys."))
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((slot db-column-slot-definition)
-		                  &key default col-type check primary-key foreign-key &allow-other-keys)
+		                  &key schema col-type check primary-key foreign-key enumerated-values &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
-    (when (eq col-type 'serial)
+    (when (eq col-type :serial)
       (setf (slot-value slot 'lock-value) t))
     (flet ((set-not-null ()
-	           (unless (eq col-type 'serial)
+	           (unless (eq col-type :serial)
 	             (setf (slot-value slot 'not-null) t))))
       (when primary-key
 	      (set-not-null)))
     (when check
       (setf (slot-value slot 'check)
 	          (infill-column check slot-name)))
+    (when enumerated-values
+      (setf (slot-value slot 'enumerated)
+            (make-instance 'enumerated-type
+                           :column slot
+                           :values (make-array (length enumerated-values)
+                                               :initial-contents enumerated-values
+                                               :fill-pointer nil
+                                               :adjustable nil))))
     (when foreign-key
       (let ((schema (getf foreign-key :schema)))
 	      (let ((f-key (apply #'make-instance 'foreign-key
@@ -302,7 +318,7 @@ don't belong in this node or a foreign key is required" self))
          (let ((slot-name (slot-definition-name slot))
                (to-check))
 
-	         (with-slots (domain table-class column-name foreign-key col-type check) slot
+	         (with-slots (domain table-class column-name foreign-key col-type check enumerated) slot
 	           (setf column-name (funcall *reserved-keywords-filter* (db-syntax-prep slot-name))
 		               (slot-value slot 'table) table
 		               table-class class
@@ -311,6 +327,8 @@ don't belong in this node or a foreign key is required" self))
 					                                 (db-syntax-prep (class-name class))
 					                                 (db-syntax-prep slot-name)))
 		               (slot-value slot 'schema) schema)
+             (when enumerated
+               (setf (slot-value enumerated 'schema) schema))
 	           (when foreign-key
 	             (with-slots (ref-table table) foreign-key
 		             (setf ref-table (class-name class))

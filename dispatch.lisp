@@ -255,19 +255,23 @@ Provides resolutions for missing schemas, types, tables,and constraints.")
 		                (funcall query-function))
 		               ("42704"
 		                ;; MISSING TYPE
-		                ;; Response: Create types for all relevant
-		                ;; table inserts.
+		                ;; Response: Create types for all relevant table inserts.
 		                (let ((proc-name (format nil "initialize_~(~a~)_types" class-name)))
-		                  (respond proc-name #'create-pg-composite #'create-typed-domain))
+		                  (respond proc-name
+                               #'create-pg-composite
+                               #'create-typed-domain))
 		                (funcall query-function))
 		               ("42P01"
 		                ;; MISSING TABLE OR TYPE IN DB.
-		                ;; Response: rebuild database component and
-		                ;; (re)initialize database.
+		                ;; Response: rebuild database component and (re)initialize database.
 		                ;; Note: An effective way to build a database is to
 		                ;; let an insert fail and thus invoke this response.
 		                (let ((proc-name (format nil "initialize_~(~a~)_relations" class-name)))
-		                  (respond proc-name #'create-table-statement #'foreign-keys-statements #'index-statement))
+		                  (respond proc-name
+                               #'create-enumerated-types-statement
+                               #'create-table-statement
+                               #'foreign-keys-statements
+                               #'index-statement))
 		                (funcall query-function))
 		               ("42883"
 		                ;; MISSING PROCEDURE
@@ -416,6 +420,7 @@ before the first single quote.")
 
   (:method
       :in db-layer ((slot db-column-slot-definition) (col-type (eql :text)) (value string))
+    (declare (ignore slot))
     (concatenate 'string "E'" value "'"))
 
   ;;; the rest

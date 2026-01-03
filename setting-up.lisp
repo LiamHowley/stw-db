@@ -25,6 +25,48 @@
     (format nil "GRANT ALL PRIVILEGES ON SCHEMA ~(~a~) TO ~a" schema user)))
 
 
+
+(defun funcall-tables (tables method)
+  (flatten
+   (loop
+     for table in tables
+     for object = (find-class table)
+     for statement = (with-active-layers (db-table-layer)
+                       (funcall method object))
+     when statement
+       collect statement)))
+
+
+;;; create enumerated type
+
+(define-layered-function create-enumerated-types-statement (class)
+  (:documentation "Create enumerated-types in schema.")
+
+  (:method
+      :in db-interface-layer ((class db-interface-class))
+    (funcall-tables (slot-value class 'tables) #'create-enumerated-types-statement))
+
+  (:method
+      :in db-table-layer ((class db-table-class))
+    (with-slots (enumerated-columns schema) class
+      (loop
+        for slot in (filter-slots-by-type class 'db-column-slot-definition)
+        for instance = (slot-value slot 'enumerated)
+        when instance
+          do (princ (format nil "Creating enumerated type: ~s in schema: ~s~%" (column-name slot) schema))
+          and collect (statement instance)))))
+
+
+(define-layered-method statement
+  :in-layer db-table-layer ((statement enumerated-type))
+  (with-slots (schema column values) statement
+    (let ((enum-type (set-sql-name schema (slot-value column 'column-name))))
+      (format nil
+              "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE TYPE ~a_AS ENUM (~{'~a'~^, ~}); END IF;"
+              enum-type enum-type (array-to-list values)))))
+
+
+
 ;;; create table
 
 (define-layered-function create-table-statement (class)
@@ -32,13 +74,7 @@
 
   (:method
       :in db-interface-layer ((class db-interface-class))
-    (loop
-      for table in (slot-value class 'tables)
-      for object = (find-class table)
-      for statement = (with-active-layers (db-table-layer)
-			                  (create-table-statement object))
-      when statement
-	      collect statement))
+    (funcall-tables (slot-value class 'tables) #'create-table-statement))
 
   (:method
       :in db-table-layer ((class db-table-class))
@@ -76,11 +112,13 @@
 
 (define-layered-method clause
   :in-layer db-table-layer ((column db-column-slot-definition))
-  (with-slots (column-name col-type not-null unique) column
+  (with-slots (column-name col-type not-null unique enumerated) column
     (format nil "~(~a~) ~{~a~}"
 	          column-name
             (list
-             (format nil "~a" col-type)
+             (if enumerated
+                 column-name
+                 (format nil "~a" col-type))
              (if not-null " NOT NULL" "")
              (if (eq unique t) " UNIQUE" "")
              (if (slot-boundp column 'default)
@@ -119,16 +157,9 @@
 
 (define-layered-function foreign-keys-statements (class)
 
-  (:method 
+  (:method
       :in db-interface-layer ((class db-interface-class))
-    (with-slots (tables) class
-      (let (collated-keys)
-	      (loop for table in tables
-	            for f-keys = (with-active-layers (db-table-layer)
-			                       (foreign-keys-statements (find-class table)))
-	            when f-keys
-		            do (setf collated-keys (nconc collated-keys f-keys)))
-	      collated-keys)))
+    (funcall-tables (slot-value class 'tables) #'foreign-keys-statements))
 
   (:method
       :in db-table-layer ((class db-table-class))

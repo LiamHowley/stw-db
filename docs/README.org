@@ -242,9 +242,14 @@ In retrieving a node the values assigned to slots are used in the "where" clause
 
 *** Setting up:
 
-The simplest procedure for setting up is to attempt to insert a record and let the insert fail. If a schema, table, type, or procedure is unknown, a database-error is returned and the necessary resource created recursively. Otherwise, a slew of layered functions is available to: CREATE-SCHEMA, SET-SCHEMA, SET-PRIVILEGED-USER, CREATE-TABLE-STATEMENT, FOREIGN-KEY-STATEMENTS, CREATE-PG-COMPOSITE, CREATE-TYPED-DOMAIN.
+The simplest procedure for setting up is to attempt to insert a record and let the insert fail. If a schema, table, type, or procedure is unknown, a database-error is returned and the necessary resource is searched for and created recursively. Otherwise, a slew of layered functions is available to: CREATE-SCHEMA, SET-SCHEMA, SET-PRIVILEGED-USER, CREATE-TABLE-STATEMENT, FOREIGN-KEY-STATEMENTS, CREATE-PG-COMPOSITE, CREATE-TYPED-DOMAIN, CREATE-ENUMERATED-TYPES-STATEMENT.
 
 Note: All foreign keys unless already indexed are automatically indexed.
+
+
+*** Enumerated types:
+
+Setting values as an ordered list to the :ENUMERATED-VALUES initarg results in a type being created with the same name as the column. The values are passed to an array for indexing and access.
 
 
 *** Tearing down:

@@ -106,6 +106,7 @@
 		                 :on-delete :cascade
 		                 :on-update :cascade))
    (handle :col-type :text
+           :enumerated-values ("foo" "bar" "baz")
 	         :not-null t)))
 
 
@@ -244,6 +245,19 @@
 	          (stw.db::include-tables *account*)))
       (false (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-email) 'email 'db-column-slot-definition)))
       (true (stw.db::slot-to-go *account* (find-slot-definition (find-class 'user-handle) 'handle 'db-column-slot-definition))))))
+
+
+(define-test enumerated-types...
+  :parent stw-db
+  (with-active-layers (db-table-layer)
+    (let* ((user-handle (find-class 'user-handle))
+           (enum-slot (find-slot-definition user-handle 'handle 'db-column-slot-definition))
+           (enum-slot-value (slot-value enum-slot 'stw.db::enumerated))
+           (enum-values (slot-value enum-slot-value 'values)))
+      (of-type stw.db::enumerated-type enum-slot-value)
+      (of-type array enum-values)
+      (is string= (car (create-enumerated-types-statement user-handle))
+          "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'stw_test_schema.handle') THEN CREATE TYPE stw_test_schema.handle_AS ENUM ('foo', 'bar', 'baz'); END IF;"))))
 
 
 (define-test keyword...

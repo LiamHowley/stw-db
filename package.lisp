@@ -175,6 +175,7 @@
 
    ;; statement functions
    :create-table-statement
+   :create-enumerated-types-statement
    :foreign-keys-statements
    :index-statement
 

@@ -26,8 +26,8 @@
 (defmacro run-tests (&optional include-live-tests)
   `(if ,include-live-tests
        (progn 
-	(test 'stw-db)
-	(live-tests))
+         (test 'stw-db)
+         (live-tests))
        (test 'stw-db)))
 
 (defparameter *schema* "stw_test_schema")
