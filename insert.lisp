@@ -7,8 +7,8 @@
   (declare (ignore rest))
   (let ((procedure (call-next-method)))
     (setf (slot-value procedure 'name)
-	  (format nil "~(~a~)_insert"
-		  (db-syntax-prep (class-name component))))
+	        (format nil "~(~a~)_insert"
+		              (db-syntax-prep (class-name component))))
     procedure))
 
 
@@ -16,49 +16,49 @@
   :in-layer insert-node ((class serialize) component &rest rest &key)
   (declare (ignore component rest))
   (let* ((base-class (class-of class))
-	 (components (generate-components base-class))
-	 (tables (include-tables class))
-	 (schema (slot-value base-class 'schema))
-	 (procedure (make-instance 'procedure
-				   :schema schema
-				   :name (format nil "~a_insert_~a"
-						 (db-syntax-prep (class-name base-class))
-						 (proc-id rest)))))
+	       (components (generate-components base-class))
+	       (tables (include-tables class))
+	       (schema (slot-value base-class 'schema))
+	       (procedure (make-instance 'procedure
+				                           :schema schema
+				                           :name (format nil "~a_insert_~a"
+						                                     (db-syntax-prep (class-name base-class))
+						                                     (proc-id rest)))))
     (with-slots (name args vars sql-list p-controls relevant-slots) procedure
       (setf schema (slot-value base-class 'schema))
       (let (returns)
-	(loop
-	  with num = 0
-	  for table in tables
-	  do (with-slots (sql declarations params param-controls)
-		 (gethash table components)
+	      (loop
+	        with num = 0
+	        for table in tables
+	        do (with-slots (sql declarations params param-controls)
+		             (gethash table components)
 
-	       ;; declared vars
-	       (loop
-		 for declaration in declarations
-		 for var = (var-var declaration)
-		 do (push var vars)
-		 do (pushnew (var-param declaration) params :test #'equal)
-		 do (pushnew (format nil "~a := ~a;" (var-column declaration) (car var)) returns
-			     :test #'equal))
-	       ;; controls
-	       (loop
-		 for param in param-controls
-		 do (push param p-controls))
+	             ;; declared vars
+	             (loop
+		             for declaration in declarations
+		             for var = (var-var declaration)
+		             do (push var vars)
+		             do (pushnew (var-param declaration) params :test #'equal)
+		             do (pushnew (format nil "~a := ~a;" (var-column declaration) (car var)) returns
+			                       :test #'equal))
+	             ;; controls
+	             (loop
+		             for param in param-controls
+		             do (push param p-controls))
 
-	       ;; params
-	       (cond (params
-			 (loop
-			   for param in params
-			   do (push param args)
-			   do (incf num))
-			 (push (format nil sql num) sql-list))
-		     (t (push sql sql-list)))))
-	(setf args (nreverse args)
-	      p-controls (nreverse p-controls)
-	      relevant-slots (get-relevant-slots class procedure)
-	      sql-list (nconc (nreverse sql-list) returns)
-	      vars (nreverse vars)))
+	             ;; params
+	             (cond (params
+			                (loop
+			                  for param in params
+			                  do (push param args)
+			                  do (incf num))
+			                (push (format nil sql num) sql-list))
+		                 (t (push sql sql-list)))))
+	      (setf args (nreverse args)
+	            p-controls (nreverse p-controls)
+	            relevant-slots (get-relevant-slots class procedure)
+	            sql-list (nconc (nreverse sql-list) returns)
+	            vars (nreverse vars)))
       procedure)))
 
 
@@ -71,18 +71,18 @@
 Returns a list of tables."
     (let ((tables (slot-value (class-of class) 'tables)))
       (loop
-	with num = 0
-	for table in tables
-	for required = (require-columns (find-class table))
-	for include-table = (cond ((and required
-					(loop
-					  for slot in required
-					  always (slot-to-go class slot)))
-				   t)
-				  (required nil)
-				  (t t))
-	when include-table
-	  collect table))))
+	      with num = 0
+	      for table in tables
+	      for required = (require-columns (find-class table))
+	      for include-table = (cond ((and required
+					                              (loop
+					                                for slot in required
+					                                always (slot-to-go class slot)))
+				                           t)
+				                          (required nil)
+				                          (t t))
+	      when include-table
+	        collect table))))
 
 
 
@@ -98,14 +98,14 @@ and not null. Returns a boolean.")
     (let ((slot-name (slot-definition-name slot)))
       ;; is it a directly inherited slot or a mapped-slot
       (if (slot-exists-p class slot-name)
-	  (with-slots (col-type not-null) slot
-	    (if not-null
-		(or (slot-value class slot-name)
-		    (eq col-type :serial)
-		    (slot-boundp slot 'default))
-		t))
-	  (awhen (match-mapping-node (class-of class) slot)
-	    (slot-to-go class (mapping-slot self))))))
+	        (with-slots (col-type not-null) slot
+	          (if not-null
+		            (or (slot-value class slot-name)
+		                (eq col-type :serial)
+		                (slot-boundp slot 'default))
+		            t))
+	        (awhen (match-mapping-node (class-of class) slot)
+	          (slot-to-go class (mapping-slot self))))))
 
   (:method
       :in db-layer ((class serialize) (slot db-aggregate-slot-definition))
@@ -117,8 +117,8 @@ and not null. Returns a boolean.")
 (defun declared-var (table column &optional prefix)
   (with-slots (col-type column-name) column
     (let* ((col-type% (if (eq col-type :serial) :integer col-type))
-	   (column-name (as-prefix column-name))
-	   (column-param (format nil "~@[~a~]_~a" prefix column-name)))
+	         (column-name (as-prefix column-name))
+	         (column-param (format nil "~@[~a~]_~a" prefix column-name)))
       (make-var
        :column column-param
        :var (list (format nil "_~a_~a" table column-name) col-type% nil)
@@ -129,19 +129,19 @@ and not null. Returns a boolean.")
 (define-layered-method generate-components
   :in insert-node ((class db-interface-class) &key)
   (let* ((tables (tables class))
-	 (components (make-hash-table :test #'eq :size (length tables))))
+	       (components (make-hash-table :test #'eq :size (length tables))))
     (loop
       for table in tables
       for table-class% = (find-class table)
       for map = (match-mapping-node class table-class%)
-	do (multiple-value-bind (table-class component)
-	       (generate-component (if map map table-class%)
-				   #'(lambda (f-key)
-				       (with-slots (ref-table no-join) f-key
-					 (unless no-join
-					   (member ref-table tables :test #'eq)))))
-	     (when component
-	       (setf (gethash table-class components) component))))
+	    do (multiple-value-bind (table-class component)
+	           (generate-component (if map map table-class%)
+				                         #'(lambda (f-key)
+				                             (with-slots (ref-table no-join) f-key
+					                             (unless no-join
+					                               (member ref-table tables :test #'eq)))))
+	         (when component
+	           (setf (gethash table-class components) component))))
     components))
 
 
@@ -150,63 +150,63 @@ and not null. Returns a boolean.")
   (declare (ignore function))
   (with-slots (schema table) class
     (let* ((slot (car (filter-slots-by-type class 'db-column-slot-definition)))
-	   (column (column-name slot))
-	   (table-name (set-sql-name schema table))
-	   (declared-var (with-slots (col-type) slot
-			   (when (or (eq col-type :serial)
-				     (slot-boundp slot 'default))
-			     (declared-var (as-prefix table) slot)))))
+	         (column (column-name slot))
+	         (table-name (set-sql-name schema table))
+	         (declared-var (with-slots (col-type) slot
+			                     (when (or (eq col-type :serial)
+				                             (slot-boundp slot 'default))
+			                       (declared-var (as-prefix table) slot)))))
       (values
        (class-name class)
        (make-component
-	:sql (format nil "INSERT INTO ~a DEFAULT VALUES RETURNING ~a INTO ~a;"
-		     table-name (set-sql-name table column) (car (var-var declared-var)))
-	:declarations (list declared-var)
-	:param-controls (list nil))))))
+	      :sql (format nil "INSERT INTO ~a DEFAULT VALUES RETURNING ~a INTO ~a;"
+		                 table-name (set-sql-name table column) (car (var-var declared-var)))
+	      :declarations (list declared-var)
+	      :param-controls (list nil))))))
 
 
 (define-layered-method generate-component
   :in-layer insert-node ((class db-table-class) (f-key-p function) &key)
   (with-slots (schema table require-columns) class
     (let* ((columns (mapcar #'column-name require-columns))
-	   (vars (mapcar #'(lambda (column)
-			     (set-sql-name table column))
-			 columns))
-	   (reference-vars columns)
-	   (returning-columns)
-	   (declared-vars))
+	         (vars (mapcar #'(lambda (column)
+			                       (set-sql-name table column))
+			                   columns))
+	         (reference-vars columns)
+	         (returning-columns)
+	         (declared-vars))
 
       ;; The slots that return values must either have
       ;; an autogenerated value as in those with col-type
       ;; :serial, or a default value.
       (loop
-	for column in (filter-slots-by-type class 'db-column-slot-definition)
-	for declared-var = (with-slots (col-type) column
-			     (when (or (eq col-type :serial)
-				       (slot-boundp column 'default))
-			       (declared-var (as-prefix table) column)))
-	when declared-var
-	  collect declared-var into declared-vars%
-	  and collect column into returning-columns%
-	finally (setf declared-vars declared-vars%
-		      returning-columns returning-columns%))
+	      for column in (filter-slots-by-type class 'db-column-slot-definition)
+	      for declared-var = (with-slots (col-type) column
+			                       (when (or (eq col-type :serial)
+				                               (slot-boundp column 'default))
+			                         (declared-var (as-prefix table) column)))
+	      when declared-var
+	        collect declared-var into declared-vars%
+	        and collect column into returning-columns%
+	      finally (setf declared-vars declared-vars%
+		                  returning-columns returning-columns%))
 
       (map nil #'(lambda (f-key)
-		   (when (funcall f-key-p f-key)
-		     (with-slots (key column) f-key
-		       (push (db-syntax-prep key) columns)
-		       (let ((reference (format nil "_~a_~a"
-						(db-syntax-prep (slot-value f-key 'table))
-						(db-syntax-prep column))))
-			 ;; If there are no vars as referenced in require-columns, all vars are
-			 ;; referencing declared variables; i.e. returned results from table(s) insert op
-			 ;; corresponding to the foreign-keys of the current table.
-			 (cond (vars
-				(push reference vars)
-				(push reference reference-vars))
-			       (t
-				(push reference reference-vars)))))))
-	   (foreign-keys class))
+		               (when (funcall f-key-p f-key)
+		                 (with-slots (key column) f-key
+		                   (push (db-syntax-prep key) columns)
+		                   (let ((reference (format nil "_~a_~a"
+						                                    (db-syntax-prep (slot-value f-key 'table))
+						                                    (db-syntax-prep column))))
+			                   ;; If there are no vars as referenced in require-columns, all vars are
+			                   ;; referencing declared variables; i.e. returned results from table(s) insert op
+			                   ;; corresponding to the foreign-keys of the current table.
+			                   (cond (vars
+				                        (push reference vars)
+				                        (push reference reference-vars))
+			                         (t
+				                        (push reference reference-vars)))))))
+	         (foreign-keys class))
 
       ;; Returning values: The class-name of table and a structure object
       ;; of type component, containing:
@@ -219,31 +219,31 @@ and not null. Returns a boolean.")
       (values
        (class-name class)
        (make-component 
-	:sql (format nil
-		     "INSERT INTO ~a (~{~a~^, ~}) ~a~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
-		     (set-sql-name schema table)
-		     columns
-		     (if vars
-			 (format nil "SELECT ~{~a~^, ~} FROM UNNEST ($~~a)" reference-vars)
-			 (format nil "VALUES (~{~a~^, ~})" reference-vars))
-		     (mapcar #'(lambda (column)
-				 (set-sql-name table (column-name column)))
-			     returning-columns)
-		     (mapcar #'(lambda (var)
-				 (car (var-var var)))
-			     declared-vars))
-	:declarations declared-vars
-	:params (when vars
-	  `((:in ,(format nil "~a_type[]" (set-sql-name schema (as-prefix table))))))
-	:param-controls (cond (vars
-			       (nconc
-				(when returning-columns
-				  (mapcar (constantly nil) returning-columns))
-				(list (when vars
-					(sql-typed-array class)))))
-			      (returning-columns
-			       (mapcar (constantly nil) returning-columns))
-			      (t (list nil))))))))
+	      :sql (format nil
+		                 "INSERT INTO ~a (~{~a~^, ~}) ~a~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
+		                 (set-sql-name schema table)
+		                 columns
+		                 (if vars
+			                   (format nil "SELECT ~{~a~^, ~} FROM UNNEST ($~~a)" reference-vars)
+			                   (format nil "VALUES (~{~a~^, ~})" reference-vars))
+		                 (mapcar #'(lambda (column)
+				                         (set-sql-name table (column-name column)))
+			                       returning-columns)
+		                 (mapcar #'(lambda (var)
+				                         (car (var-var var)))
+			                       declared-vars))
+	      :declarations declared-vars
+	      :params (when vars
+	                `((:in ,(format nil "~a_type[]" (set-sql-name schema (as-prefix table))))))
+	      :param-controls (cond (vars
+			                         (nconc
+				                        (when returning-columns
+				                          (mapcar (constantly nil) returning-columns))
+				                        (list (when vars
+					                              (sql-typed-array class)))))
+			                        (returning-columns
+			                         (mapcar (constantly nil) returning-columns))
+			                        (t (list nil))))))))
 
 
 (define-layered-method generate-component
@@ -251,71 +251,71 @@ and not null. Returns a boolean.")
   (let ((table-class (mapped-table map)))
     (with-slots (schema table) table-class
       (let ((require-columns (or (slot-value map 'mapped-columns)
-				 (ensure-list (slot-value map 'mapped-column)))))
-	(loop
-	  for slot in (filter-slots-by-type table-class 'db-column-slot-definition)
-	  for column-name = (slot-value slot 'column-name)
-	  for domain = (slot-value slot 'domain)
-	  for f-key = (slot-value slot 'foreign-key)
-	  when (member slot require-columns :test #'equality)
-	    collect column-name into required-vars
-	    and collect column-name into required-columns
-	  when (and f-key (funcall f-key-p f-key))
-	    collect (with-slots (key column) f-key
-		      (format nil "_~a_~a"
-			      (db-syntax-prep (slot-value f-key 'table))
-			      (db-syntax-prep column)))
-	      into referenced-vars
-	  and collect column-name into referenced-columns
-	  finally (return
-		    (values (class-name table-class)
-			    (make-component
-			     :sql (format nil
-					  "INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} FROM UNNEST ($~~a);"
-					  (set-sql-name schema table)
-					  `(,@referenced-columns ,@required-columns)
-					  `(,@referenced-vars ,@required-vars))
-			     :params `((:in ,(format nil "~a.~a_type[]" schema table)))
-			     :param-controls (list (sql-typed-array map))))))))))
+				                         (ensure-list (slot-value map 'mapped-column)))))
+	      (loop
+	        for slot in (filter-slots-by-type table-class 'db-column-slot-definition)
+	        for column-name = (slot-value slot 'column-name)
+	        for domain = (slot-value slot 'domain)
+	        for f-key = (slot-value slot 'foreign-key)
+	        when (member slot require-columns :test #'equality)
+	          collect column-name into required-vars
+	          and collect column-name into required-columns
+	        when (and f-key (funcall f-key-p f-key))
+	          collect (with-slots (key column) f-key
+		                  (format nil "_~a_~a"
+			                        (db-syntax-prep (slot-value f-key 'table))
+			                        (db-syntax-prep column)))
+	            into referenced-vars
+	            and collect column-name into referenced-columns
+	        finally (return
+		                (values (class-name table-class)
+			                      (make-component
+			                       :sql (format nil
+					                                "INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} FROM UNNEST ($~~a);"
+					                                (set-sql-name schema table)
+					                                `(,@referenced-columns ,@required-columns)
+					                                `(,@referenced-vars ,@required-vars))
+			                       :params `((:in ,(format nil "~a.~a_type[]" schema table)))
+			                       :param-controls (list (sql-typed-array map))))))))))
 
 
 (define-layered-method generate-component
   :in-layer insert-table ((map slot-mapping) (slot-to-go-p function) &key)
   (let ((table-class (mapped-table map))
-	(typed-array-name (format nil "insert_~(~a~)" (slot-definition-name (mapping-slot map)))))
+	      (typed-array-name (format nil "insert_~(~a~)" (slot-definition-name (mapping-slot map)))))
     (with-slots (schema table) table-class
       (let ((type-array (format nil "~a.~a_type[]" schema table))
-	    (require-columns (or (slot-value map 'mapped-columns)
-				 (ensure-list (slot-value map 'mapped-column)))))
-	(loop
-	  for slot in (filter-slots-by-type table-class 'db-column-slot-definition)
-	  for column-name = (slot-value slot 'column-name)
-	  for domain = (slot-value slot 'domain)
-	  unless (funcall slot-to-go-p slot)
-	    do (return)
-	  unless (slot-value slot 'primary-key)
-	    if (member slot (slot-value table-class 'require-columns) :test #'eq)
-	      collect column-name into set-columns
-	      and collect (concatenate 'string "EXCLUDED." column-name) into set
-	  if (member slot require-columns :test #'equality)
-	    collect column-name into required-columns
-	  else
-	    collect (list (set-sql-name schema domain)) into args
-	    and collect "$~a" into required-columns
-	    and collect `("~a" ,slot) into p-controls
-	  collect column-name into columns
-	  finally (return
-		    (make-component
-		     :sql (format nil
-				  "INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} FROM UNNEST($~~a)~@[ ~a~];"
-				  (set-sql-name schema table)
-				  columns
-				  required-columns
-				  (when set-columns
-				    (format nil "ON CONFLICT ON CONSTRAINT ~a DO UPDATE SET (~{~a~^, ~}) = ROW (~{~a~^, ~})"
-					    (format nil "~a_pkey" table) set-columns set)))
-		     :params `(,@args (:inout ,typed-array-name ,type-array))
-		     :param-controls `(,@p-controls ,(sql-typed-array map)))))))))
+	          (require-columns (or (slot-value map 'mapped-columns)
+				                         (ensure-list (slot-value map 'mapped-column)))))
+	      (loop
+	        for slot in (filter-slots-by-type table-class 'db-column-slot-definition)
+	        for column-name = (slot-value slot 'column-name)
+	        for domain = (slot-value slot 'domain)
+	        unless (funcall slot-to-go-p slot)
+	          do (return)
+	        unless (slot-value slot 'primary-key)
+	          if (member slot (slot-value table-class 'require-columns) :test #'eq)
+	            collect column-name into set-columns
+	            and collect (concatenate 'string "EXCLUDED." column-name) into set
+	        if (member slot require-columns :test #'equality)
+	          collect column-name into required-columns
+	        else
+	          collect (list (set-sql-name schema domain)) into args
+	          and collect "$~a" into required-columns
+	          and collect `("~a" ,slot) into p-controls
+	        collect column-name into columns
+	        finally (return
+		                (make-component
+		                 :sql (format nil
+				                          "INSERT INTO ~a (~{~a~^, ~}) SELECT ~{~a~^, ~} FROM UNNEST($~~a)~@[ ~a~];"
+				                          (set-sql-name schema table)
+				                          columns
+				                          required-columns
+				                          (when set-columns
+				                            (format nil "ON CONFLICT ON CONSTRAINT ~a DO UPDATE SET (~{~a~^, ~}) = ROW (~{~a~^, ~})"
+					                                  (format nil "~a_pkey" table) set-columns set)))
+		                 :params `(,@args (:inout ,typed-array-name ,type-array))
+		                 :param-controls `(,@p-controls ,(sql-typed-array map)))))))))
 
 
 
@@ -324,38 +324,38 @@ and not null. Returns a boolean.")
   (with-slots (schema table require-columns) class
     (let ((type-array (format nil "~a.~a_type[]" schema table)))
       (loop
-	for slot in (filter-slots-by-type class 'db-column-slot-definition)
-	for column-name = (slot-value slot 'column-name)
-	for domain = (slot-value slot 'domain)
-	for declared-var = (when (member slot require-columns :test #'equality)
-			     (declared-var (as-prefix table) slot))
-	for slot-value-p = (funcall slot-to-go-p slot)
-	unless slot-value-p
-	  do (return)
-	if declared-var
-	  collect column-name into required-columns
-	  and collect declared-var into declared-vars
-	  and collect (set-sql-name table (column-name slot)) into returning-columns
-	  and collect (car (var-var declared-var)) into vars
-	  and collect (var-param declared-var) into out-args
-	  and collect nil into out-values
-	else
-	  collect (list (set-sql-name schema domain)) into args
-	  and collect "$~a" into required-columns
-	  and collect `("~a" ,slot) into p-controls
-	collect column-name into columns
-	finally (return
-		  (make-component
-		   :sql (format nil
-				"INSERT INTO ~a (~{~a~^, ~}) ~a~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
-				(set-sql-name schema table)
-				columns
-				(format nil "SELECT ~{~a~^, ~} FROM UNNEST ($~~a)" required-columns)
-				returning-columns
-				vars)
-		   :declarations declared-vars
-		   :params `(,@args (,type-array) ,@out-args)
-		   :param-controls `(,@p-controls ,(sql-typed-array class) ,@out-values)))))))
+	      for slot in (filter-slots-by-type class 'db-column-slot-definition)
+	      for column-name = (slot-value slot 'column-name)
+	      for domain = (slot-value slot 'domain)
+	      for declared-var = (when (member slot require-columns :test #'equality)
+			                       (declared-var (as-prefix table) slot))
+	      for slot-value-p = (funcall slot-to-go-p slot)
+	      unless slot-value-p
+	        do (return)
+	      if declared-var
+	        collect column-name into required-columns
+	        and collect declared-var into declared-vars
+	        and collect (set-sql-name table (column-name slot)) into returning-columns
+	        and collect (car (var-var declared-var)) into vars
+	        and collect (var-param declared-var) into out-args
+	        and collect nil into out-values
+	      else
+	        collect (list (set-sql-name schema domain)) into args
+	        and collect "$~a" into required-columns
+	        and collect `("~a" ,slot) into p-controls
+	      collect column-name into columns
+	      finally (return
+		              (make-component
+		               :sql (format nil
+				                        "INSERT INTO ~a (~{~a~^, ~}) ~a~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
+				                        (set-sql-name schema table)
+				                        columns
+				                        (format nil "SELECT ~{~a~^, ~} FROM UNNEST ($~~a)" required-columns)
+				                        returning-columns
+				                        vars)
+		               :declarations declared-vars
+		               :params `(,@args (,type-array) ,@out-args)
+		               :param-controls `(,@p-controls ,(sql-typed-array class) ,@out-values)))))))
 
 
 

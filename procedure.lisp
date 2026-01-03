@@ -51,7 +51,7 @@ expressions."))
 ;;; pg composite arrays - used in passing values to insert procedure calls
 
 (define-layered-function sql-typed-array (class)
-  (:documentation "Control for postgres composite typed arrays, 
+  (:documentation "Control for postgres composite typed arrays,
 according to class.")
 
   (:method
@@ -59,7 +59,7 @@ according to class.")
     (wIth-slots (schema table require-columns) class
       (let ((table-name (set-sql-name schema (as-prefix table)))
 	          (control "ARRAY[ ROW (~{~a~^, ~})]::~a_type[]"))
-	      (list 
+	      (list
 	       (format nil control
 		             (loop
 		               for slot in require-columns
@@ -78,7 +78,7 @@ according to class.")
 			                      "ARRAY[ ~~{ROW (~{~a~^, ~})~~^, ~~}]::~a_type[]"
 			                      "ARRAY[ ~~{ROW (~~{~{~a~^, ~}~~})~~^, ~~}]::~a_type[]"))
 	             (mapped-columns (or column columns)))
-	        (list 
+	        (list
 	         (format nil control
 		               (loop
 		                 for slot in mapped-columns
