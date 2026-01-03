@@ -111,7 +111,7 @@ of class with updated values.")
 
   (:method
       :in-layer db-table-layer ((class serialize) (component db-table-class) &key)
-    (with-slots (schema table require-columns) component
+    (with-slots (schema table) component
       (let ((procedure (make-instance 'procedure
 				                              :schema schema
 				                              :table class))
