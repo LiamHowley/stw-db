@@ -199,6 +199,7 @@
    ;; conditions and restarts
    :invalid-operator-error
    :null-key-error
+   :null-value-error
    :update-key-value-error
    :not-an-error
    :use-expected-value))
