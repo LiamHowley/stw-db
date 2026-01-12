@@ -1,6 +1,27 @@
 (in-package stw.db)
 
 
+(defgeneric required-values-p (class table)
+  (:documentation "Check that columns that require values are neither unbound nor null
+during insert procedures. This also applies to updates where rows are deleted and
+reinserted.")
+
+  (:method ((class serialize) (table db-table-class))
+    (loop
+      for slot in (filter-slots-by-type table 'db-column-slot-definition)
+      unless (slot-to-go class slot)
+        do (null-value-error (slot-definition-name slot) class))))
+
+
+(define-layered-method sync
+  :in insert-table
+  :around ((class serialize) component &rest rest)
+  (loop
+    for table in (slot-value (class-of class) 'tables)
+    do (required-values-p class (find-class table)))
+  (call-next-method rest))
+
+
 (define-layered-method generate-procedure
   :in-layer insert-table
   ((class serialize) (component db-table-class) &rest rest &key)
@@ -71,7 +92,6 @@
 Returns a list of tables."
     (let ((tables (slot-value (class-of class) 'tables)))
       (loop
-	      with num = 0
 	      for table in tables
 	      for required = (require-columns (find-class table))
 	      for include-table = (cond ((and required
@@ -89,7 +109,7 @@ Returns a list of tables."
 (define-layered-function slot-to-go (class slot)
   (:documentation "A column that is set to NOT NULL, has neither a DEFAULT set
 nor a derived value from a FOREIGN KEY, nor is of type serial, must have a supplied
-value, otherwise an error will be thrown upon inserting. Should SLOT not
+value, otherwise a database error will be thrown upon inserting. Should SLOT not
 be present in CLASS, SLOT must be mapped and the mapping slot must be present, bound
 and not null. Returns a boolean.")
 
