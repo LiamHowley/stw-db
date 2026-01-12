@@ -20,8 +20,7 @@
 (define-layered-method sync
   :in update-node ((old serialize) (new serialize) &rest rest)
 
-  ;; Primary keys of the primary
-  ;; table in tables must match.
+  "Primary keys of the primary table in tables must match."
   (or (match-root-keys old new)
       (call-next-method)))
 
@@ -196,7 +195,6 @@ or primary keys not matching will invoke an error.")
 
 (define-layered-method generate-procedure
   :in-layer update-node ((old serialize) (new serialize) &rest rest &key)
-  (declare (ignore rest))
   (let* ((base-class (class-of old))
 	       (procedure (make-instance 'procedure
 				                           :schema (slot-value base-class 'schema)
@@ -252,8 +250,8 @@ or primary keys not matching will invoke an error.")
 			                  (with-slots (sql set-params where-params set-controls where-controls) component
 			                    (build-procedure set-params)
 			                    (build-procedure where-params)
-			                    (assign-slots :new set-controls) 
-			                    (assign-slots :old where-controls) 
+			                    (assign-slots :new set-controls)
+			                    (assign-slots :old where-controls)
 			                    (push (apply #'format nil sql (number-range open close)) sql-list)
 			                    (setf open close
 				                        p-controls `(,@p-controls ,@set-controls ,@where-controls))))
@@ -423,7 +421,7 @@ it's clone (new serialize). Applies only to update-node context.")
 			                         (if (eq symbol :insert)
 				                           (mapped-values (set-difference new-values old-values :test #'equal))
 				                           (mapped-values (set-difference old-values new-values :test #'equal))))))
-	             else 
+	             else
 		             collect (prepare-value% slot
 					                               (slot-value (if (or (eq symbol :old)
 							                                               (eq symbol :delete))

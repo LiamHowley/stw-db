@@ -105,7 +105,7 @@
 			                   (typecase (car inner)
 			                     (atom
 			                      (cons (car inner) acc))
-			                     (cons 
+			                     (cons
 			                      (cons (infill-column (car inner) column) acc)))))))
       (walk list nil))))
 
