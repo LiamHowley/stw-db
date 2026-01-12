@@ -193,12 +193,13 @@ but are not themselves foreign keys."))
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((slot db-column-slot-definition)
-		                  &key schema col-type check primary-key foreign-key enumerated-values &allow-other-keys)
+		                  &key schema col-type check primary-key default foreign-key enumerated-values &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
     (when (eq col-type :serial)
       (setf (slot-value slot 'lock-value) t))
     (flet ((set-not-null ()
-	           (unless (eq col-type :serial)
+	           (unless (or default
+                         (eq col-type :serial))
 	             (setf (slot-value slot 'not-null) t))))
       (when primary-key
 	      (set-not-null)))
@@ -359,9 +360,9 @@ don't belong in this node or a foreign key is required" self))
     when (and foreign-key (slot-value foreign-key 'no-join))
       collect slot into require-columns%
     unless (or foreign-key
-	             (let ((col-type (slot-value slot 'col-type)))
-		             (or (eq col-type :serial)
-		                 (eq col-type :timestamptz))))
+               (eq (slot-value slot 'col-type) :serial)
+               (slot-value slot 'default)
+               (null (slot-value slot 'not-null)))
       collect slot into require-columns%
     finally (return (setf (slot-value instance 'require-columns) require-columns%))))
 

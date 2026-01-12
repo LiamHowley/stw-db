@@ -359,16 +359,16 @@ relevant instance of SLOT-MAPPING.")
 
   (:method
       :in db-layer ((slot db-column-slot-definition) value)
-    (with-slots (col-type not-null) slot
+    (with-slots (col-type) slot
       (let ((col-type (if (consp col-type)
-			                    (car col-type)
-			                    col-type)))
-	      (setf col-type
-	            (case col-type
-		            ((:text :varchar :char)
-		             :text)
-		            (t col-type)))
-	      (prepare-value slot col-type value))))
+                          (car col-type)
+                          col-type)))
+        (setf col-type
+              (case col-type
+                ((:text :varchar :char)
+                 :text)
+                (t col-type)))
+        (prepare-value slot col-type value))))
 
   (:method
       :in db-layer ((slot db-aggregate-slot-definition) values)
@@ -426,8 +426,4 @@ before the first single quote.")
   ;;; the rest
   (:method
       :in db-layer ((slot db-column-slot-definition) col-type value)
-    (declare (ignore col-type))
-    (cond (value (to-sql-string value))
-	        ((slot-boundp slot 'default)
-	         (to-sql-string (slot-value slot 'default)))
-	        (t "null"))))
+    (if value (to-sql-string value) "null")))
