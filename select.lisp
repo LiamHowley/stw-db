@@ -241,9 +241,13 @@
 
   (:method
       :in retrieve-node ((slot db-column-slot-definition))
-    (let* ((col-type (slot-value slot 'col-type))
-	         (col-type (if (eq col-type :serial) :integer col-type)))
-      (list (column-name slot) col-type)))
+    (with-slots (col-type schema) slot
+      (let ((col-type (cond ((slot-value slot 'enumerated)
+                             (set-sql-name schema (slot-definition-name slot)))
+                            ((eq col-type :serial)
+                             :integer)
+                            (t col-type))))
+      (list (column-name slot) col-type))))
 
   (:method
       :in retrieve-node ((slot db-aggregate-slot-definition))
