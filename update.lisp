@@ -280,7 +280,7 @@ or primary keys not matching will invoke an error.")
 			                     for table in to-delete
 			                     do (with-active-layers (delete-table)
 				                        (op :delete table)))))))
-	            (setf sql-list (nreverse (push "RETURN;" sql-list))))))))
+	            (setf sql-list `(,@sql-list "RETURN;")))))))
     procedure))
 
 
