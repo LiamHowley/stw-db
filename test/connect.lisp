@@ -4,12 +4,13 @@
 
 (defmacro live-tests ()
   `(handler-case
-       (progn (test 'live-test)
-	      (db-connect db (db-layer)
-		(drop-schema *schema* t)))
+       (progn
+         (test 'live-test)
+         (db-connect db (db-layer)
+           (drop-schema *schema* t)))
      (error () (db-connect db (db-layer)
-		  (when (cl-postgres:database-open-p stw.db::*db*)
-		    (drop-schema *schema* t))))))
+                 (when (cl-postgres:database-open-p stw.db::*db*)
+                   (drop-schema *schema* t))))))
 
 (define-test live-test)
 
