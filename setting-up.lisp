@@ -284,7 +284,7 @@ so that differing columns of the same type can be applied to a procedure call.")
 
   (:method
       :in db-table-layer ((class db-table-class))
-    (with-slots (schema table require-columns) class
+    (with-slots (schema table) class
       (format nil "~{~a~}"
 	            (let ((columns (filter-slots-by-type class 'db-column-slot-definition)))
 		            (loop
