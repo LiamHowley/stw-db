@@ -33,7 +33,7 @@
 			                   (if mismatch
 			                       (list (eql mismatch (length col-type)))
 			                       (list t))))
-		               '("timestamp" "date" "time" "interval"))))))
+		               '("timestamptz" "timestamp" "date" "time" "interval"))))))
 
 
 (declaim (inline boolean-value))
