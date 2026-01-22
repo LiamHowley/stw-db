@@ -241,7 +241,7 @@ or primary keys not matching will invoke an error.")
 			                         collect var into vars%
 			                         collect (format nil "~a := ~a;" (var-column declaration) (car var)) into returns
 			                         finally (setf vars `(,@vars ,@vars%)
-					                                   sql-list (nconc returns sql-list)))))))
+					                                   sql-list (nconc sql-list returns)))))))
 		            (loop
 		              for table in tables
 		              for component = (gethash table components)
