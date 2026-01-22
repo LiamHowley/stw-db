@@ -258,6 +258,7 @@ Provides resolutions for missing schemas, types, tables,and constraints.")
 		                ;; Response: Create types for all relevant table inserts.
 		                (let ((proc-name (format nil "initialize_~(~a~)_types" class-name)))
 		                  (respond proc-name
+                               #'create-enumerated-types-statement
                                #'create-pg-composite
                                #'create-typed-domain))
 		                (funcall query-function))
@@ -268,7 +269,6 @@ Provides resolutions for missing schemas, types, tables,and constraints.")
 		                ;; let an insert fail and thus invoke this response.
 		                (let ((proc-name (format nil "initialize_~(~a~)_relations" class-name)))
 		                  (respond proc-name
-                               #'create-enumerated-types-statement
                                #'create-table-statement
                                #'foreign-keys-statements
                                #'index-statement))
@@ -426,4 +426,8 @@ before the first single quote.")
   ;;; the rest
   (:method
       :in db-layer ((slot db-column-slot-definition) col-type value)
-    (if value (to-sql-string value) "null")))
+    (cond (value
+           (to-sql-string value))
+          ((slot-boundp slot 'default)
+           (to-sql-string (slot-value slot 'default)))
+          (t "null"))))

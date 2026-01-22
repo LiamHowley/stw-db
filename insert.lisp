@@ -136,8 +136,8 @@ and not null. Returns a boolean.")
 
 
 (defun declared-var (table column &optional prefix)
-  (with-slots (col-type column-name) column
-    (let* ((col-type% (if (eq col-type :serial) :integer col-type))
+  (with-slots (col-type column-name enumerated) column
+    (let* ((col-type% (get-column-type column))
 	         (column-name (as-prefix column-name))
 	         (column-param (format nil "~@[~a~]_~a" prefix column-name)))
       (make-var
@@ -200,8 +200,8 @@ and not null. Returns a boolean.")
       (loop
         for column in (filter-slots-by-type class 'db-column-slot-definition)
         for declared-var = (with-slots (col-type) column
-                             (when (or (eq col-type :serial)
-                                       (slot-boundp column 'default))
+                             (when (or (slot-boundp column 'default)
+                                       (eq col-type :serial))
                                (declared-var (as-prefix table) column)))
         when declared-var
           collect declared-var into declared-vars%

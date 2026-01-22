@@ -261,7 +261,7 @@ multiple records in a one-to-many relationship.")
 	      (format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a_type') THEN CREATE TYPE ~a_type AS (~{~{~a ~a~}~^, ~}); END IF;"
 		            (as-prefix table) table-name (mapcar #'(lambda (column)
 							                                           (list (column-name column)
-								                                               (col-type column)))
+								                                               (get-column-type column)))
 							                                       require-columns))))))
 
 
@@ -292,9 +292,18 @@ so that differing columns of the same type can be applied to a procedure call.")
 		              do (princ (format nil "Creating domain: ~s~%" (slot-value column 'domain)))
 		              collect (with-slots (domain col-type) column
 			                      (format nil "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE DOMAIN ~a.~a AS ~a; END IF;"
-				                            domain schema domain (if (eq col-type :serial)
-							                                               :integer
-							                                               col-type)))))))))
+				                            domain schema domain (get-column-type column)))))))))
+
+
+
+(defmethod get-column-type ((column db-column-slot-definition))
+  (with-slots (col-type enumerated schema) column
+    (cond ((eq col-type :serial)
+           :integer)
+          (enumerated
+           (set-sql-name schema (slot-definition-name column)))
+          (t
+           col-type))))
 
 
 ;;; setting up
