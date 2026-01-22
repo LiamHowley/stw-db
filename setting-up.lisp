@@ -60,9 +60,9 @@
 (define-layered-method statement
   :in-layer db-table-layer ((statement enumerated-type))
   (with-slots (schema column values) statement
-    (let ((enum-type (set-sql-name schema (slot-value column 'column-name))))
+    (let ((enum-type (set-sql-name (slot-value column 'column-name))))
       (format nil
-              "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE TYPE ~a_AS ENUM (~{'~a'~^, ~}); END IF;"
+              "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE TYPE ~a AS ENUM (~{'~a'~^, ~}); END IF;"
               enum-type enum-type (array-to-list values)))))
 
 
