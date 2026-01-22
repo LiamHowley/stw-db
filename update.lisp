@@ -102,35 +102,34 @@ or primary keys not matching will invoke an error.")
                                             next-field
                                             '("{\"(\\\"" "\\\")\",(" "\\\")" "{(" "),(" ")(" ")}" "),\"(\\\"" "\\\")\"}")
                                             :remove-separators t))
-					                                (columns
-					                                 (let ((type (slot-value slot 'express-as-type)))
-					                                   (parse-result slot columns type next-field))))))
-				                      (loop
-				                        for value in list
-				                        do (setf (slot-value class slot-name)
-					                               (remove value (slot-value class slot-name) :test #'equal))))))
-			                   (db-column-slot-definition
-			                    (when (equal next-field (slot-value class slot-name))
-			                      (setf (slot-value class slot-name) nil))))))
-		                (t
-		                 (when (and slot (typep slot 'db-column-slot-definition))
-		                   (setf (slot-value class slot-name)
-			                       (cond ((stringp next-field)
-				                            (string-trim '(#\") next-field))
-				                           ((and (eq next-field :null)
-					                               (or (null (slot-value slot 'not-null))
-					                                   (eq (col-type slot) :boolean)))
-				                            nil)
-				                           ((eq next-field :null)
-				                            (slot-makunbound class slot-name))
-				                           (t next-field)))))))))
+                                          (columns
+                                           (let ((type (slot-value slot 'express-as-type)))
+                                             (parse-result slot columns type next-field))))))
+                              (loop
+                                for value in list
+                                do (setf (slot-value class slot-name)
+                                         (remove value (slot-value class slot-name) :test #'equal))))))
+                         (db-column-slot-definition
+                          (when (equal next-field (slot-value class slot-name))
+                            (setf (slot-value class slot-name) nil))))))
+                    (t
+                     (when (and slot (typep slot 'db-column-slot-definition))
+                       (cond ((stringp next-field)
+                              (setf (slot-value class slot-name) (string-trim '(#\") next-field)))
+                             ((and (eq next-field :null)
+                                   (or (null (slot-value slot 'not-null))
+                                       (eq (col-type slot) :boolean)))
+                              (setf (slot-value class slot-name) nil))
+                             ((eq next-field :null)
+                              (slot-makunbound class slot-name))
+                             (t (setf (slot-value class slot-name) next-field)))))))))
     (row-reader (fields)
       (loop
-	      while (next-row)
-	      do (loop
-	           for field across fields
-	           do (process-fields (field-name field) (next-field field)))
-	      finally (return class)))))
+        while (next-row)
+        do (loop
+             for field across fields
+             do (process-fields (field-name field) (next-field field))))
+      class)))
 
 
 (define-layered-method parse-result
