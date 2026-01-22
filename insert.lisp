@@ -167,16 +167,13 @@ and not null. Returns a boolean.")
 
 
 (define-layered-method generate-component
-  :in insert-node ((class db-key-table) function &key)
+  :in insert ((class db-key-table) function &key)
   (declare (ignore function))
   (with-slots (schema table) class
     (let* ((slot (car (filter-slots-by-type class 'db-column-slot-definition)))
 	         (column (column-name slot))
 	         (table-name (set-sql-name schema table))
-	         (declared-var (with-slots (col-type) slot
-			                     (when (or (eq col-type :serial)
-				                             (slot-boundp slot 'default))
-			                       (declared-var (as-prefix table) slot)))))
+	         (declared-var (declared-var (as-prefix table) slot)))
       (values
        (class-name class)
        (make-component
