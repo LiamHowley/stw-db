@@ -118,16 +118,16 @@ of class with updated values.")
 	          (returns)
 	          (mapping-node (match-mapping-node (class-of class) component)))
 	      (with-slots (args vars sql-list p-controls relevant-slots) procedure
-	        (let ((component (generate-component (or mapping-node component) (constantly t))))
-	          (with-slots (sql params param-controls declarations) component
+          (let ((component% (nth-value 1 (generate-component (or mapping-node component)
+                                                             #'(lambda (slot)
+                                                                 (slot-to-go class slot))))))
+	          (with-slots (sql params param-controls declarations) component%
 	            (loop
 		            for declaration in declarations
 		            for var = (var-var declaration)
-		            collect (var-param declaration) into params%
 		            collect var into vars%
 		            collect (format nil "~a := ~a;" (var-column declaration) (car var)) into returns%
 		            finally (setf vars vars%
-			                        params (nconc params params%)
 			                        returns returns%))
 	            (setf sql-list `(,(apply #'format nil sql
 				                               (loop

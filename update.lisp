@@ -260,9 +260,9 @@ or primary keys not matching will invoke an error.")
 			                    for (prefix compo) on component by #'cddr
 			                    do (process-many-to-one-component prefix compo)))))
 		            (flet ((op (prefix table)
-			                   (awhen (generate-component table
-						                                        #'(lambda (slot)
-							                                          (slot-to-go new slot)))
+                         (awhen (nth-value 1 (generate-component table
+                                                                 #'(lambda (slot)
+                                                                     (slot-to-go new slot))))
 			                     (process-many-to-one-component prefix self))))
 		              (when to-insert
 		                (loop
@@ -369,14 +369,14 @@ db-aggregate-slot-definition.")
       for to-insert = (set-difference new-values old-values :test #'equal)
       for insertion = (when to-insert
 			                  (with-active-layers (insert-table)
-			                    (generate-component map
+			                    (nth-value 1 (generate-component map
 					                                    (lambda (slot%)
-						                                    (slot-to-go new slot%)))))
+						                                    (slot-to-go new slot%))))))
       for deletion = (when to-delete
 		                   (with-active-layers (delete-table)
-			                   (generate-component map
+			                   (nth-value 1 (generate-component map
 					                                   (lambda (slot%)
-					                                     (slot-to-go old slot%)))))
+					                                     (slot-to-go old slot%))))))
       when insertion
 	      collect :insert into components%
 	      and collect insertion into components%
@@ -488,7 +488,7 @@ it's clone (new serialize). Applies only to update-node context.")
 	        and collect (update-param-control slot) into where-controls
 	      finally (when set-columns
 		              (return
-		                (make-update-component 
+		                (make-update-component
 		                 :sql (format nil
 				                          "UPDATE ~a SET ~{~a = $~~a~^, ~} WHERE ~{~a = $~~a~^ AND ~};"
 				                          (set-sql-name schema table) set-columns where-columns)

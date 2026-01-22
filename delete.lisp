@@ -130,35 +130,36 @@ have no value.")
   :in delete-table ((class db-table-class) (slot-to-go-p function) &key)
   (with-slots (schema table require-columns primary-keys) class
     (let ((table-name (set-sql-name schema table))
-	        (single-row (loop
-			                  for slot in primary-keys
-			                  always (funcall slot-to-go-p slot))))
-      (loop 
-	      for column in (filter-slots-by-type class 'db-column-slot-definition)
-	      for column-name = (slot-value column 'column-name)
-	      for domain = (slot-value column 'domain)
-	      for declared-var = (when (and single-row
-				                              (member column require-columns :test #'equality))
-			                       (declared-var (as-prefix table) column "delete"))
-	      for slot-value-p = (funcall slot-to-go-p column)
-	      when declared-var
-	        collect declared-var into declared-vars
-	        and collect (set-sql-name table (column-name column)) into returning-columns
-	        and collect (car (var-var declared-var)) into vars
-	        and collect (var-param declared-var) into out-args
-	        and collect nil into out-values
-	      when slot-value-p
-	        collect (list (set-sql-name schema domain)) into args
-	        and collect `("~a" ,column) into p-controls
-	        and collect (format nil "~a = $~~a" column-name) into where
-	      finally (return
-		              (when where
-		                (make-component
-		                 :sql (format nil "DELETE FROM ~a WHERE ~{~a~^ AND~% ~}~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
-				                          table-name where returning-columns vars)
-		                 :declarations declared-vars
-		                 :params `(,@args ,@out-args)
-		                 :param-controls `(,@p-controls ,@out-values))))))))
+          (single-row (loop
+                        for slot in primary-keys
+                        always (funcall slot-to-go-p slot))))
+      (loop
+        for column in (filter-slots-by-type class 'db-column-slot-definition)
+        for column-name = (slot-value column 'column-name)
+        for domain = (slot-value column 'domain)
+        for declared-var = (when (and single-row
+                                      (member column require-columns :test #'equality))
+                             (declared-var (as-prefix table) column "delete"))
+        for slot-value-p = (funcall slot-to-go-p column)
+        when declared-var
+          collect declared-var into declared-vars
+          and collect (set-sql-name table (column-name column)) into returning-columns
+          and collect (car (var-var declared-var)) into vars
+          and collect (var-param declared-var) into out-args
+          and collect nil into out-values
+        when slot-value-p
+          collect (list (set-sql-name schema domain)) into args
+          and collect `("~a" ,column) into p-controls
+          and collect (format nil "~a = $~~a" column-name) into where
+        finally (return
+                  (values (class-name class)
+                          (when where
+                            (make-component
+                             :sql (format nil "DELETE FROM ~a WHERE ~{~a~^ AND~% ~}~@[ RETURNING ~{~a~^, ~} INTO ~{~a~^, ~}~];"
+                                          table-name where returning-columns vars)
+                             :declarations declared-vars
+                             :params `(,@args ,@out-args)
+                             :param-controls `(,@p-controls ,@out-values)))))))))
 
 
 
@@ -166,57 +167,58 @@ have no value.")
 (define-layered-method generate-component
   :in delete-table ((map slot-mapping) (slot-to-go-p function) &key)
   (let* ((class (mapped-table map))
-	       (mapped-column (mapped-column map))
-	       (mapped-columns (mapped-columns map))
-	       (mapping-slot (mapping-slot map))
-	       (typed-array-name (format nil "delete_~(~a~)" (slot-definition-name mapping-slot))))
+         (mapped-column (mapped-column map))
+         (mapped-columns (mapped-columns map))
+         (mapping-slot (mapping-slot map))
+         (typed-array-name (format nil "delete_~(~a~)" (slot-definition-name mapping-slot))))
     (with-slots (schema table require-columns primary-keys) class
       (let ((table-name (set-sql-name schema table))
-	          (type-array (format nil "~a.~a_type[]" schema table))
-	          (single-row (loop
-			                    for slot in primary-keys
-			                    always (funcall slot-to-go-p slot))))
-	      (loop 
-	        for column in (filter-slots-by-type class 'db-column-slot-definition)
-	        for column-name = (slot-value column 'column-name)
-	        for domain = (slot-value column 'domain)
-	        for slot-value-p = (funcall slot-to-go-p column)
-	        with require-column = nil
-	        if (and mapped-column
-		              (eq column mapped-column)
-		              slot-value-p)
-	          do (setf require-column column-name)
-	        else
-	          if (and mapped-columns
-		                (member column mapped-columns :test #'eq)
-		                slot-value-p)
-	            collect column-name into required-columns
-	        else 
-	          if (and (member column require-columns :test #'equality)
-		                slot-value-p)
-	            collect column-name into required-columns
-	        else
-	          if slot-value-p
-	            collect (list (set-sql-name schema domain)) into args
-	            and collect `("~a" ,column) into p-controls
-	            and collect column-name into where
-	        finally (return
-		                (when (or where require-column)
-		                  (make-component
-		                   :sql (format nil "DELETE FROM ~a WHERE~{ ~a~^ AND~};"
-				                            table-name
-				                            `(,@(mapcar #'(lambda (column-name)
-						                                        (format nil "~a = $~~a" column-name))
-						                                    where)
-				                              ,(cond (mapped-column
-					                                    (format nil "~a IN (SELECT ~a FROM UNNEST ($~~a))"
-						                                          require-column require-column))
-					                                   (mapped-columns
-					                                    (let ((where (mapcar #'(lambda (column)
-								                                                       (let ((col-name (column-name column)))
-									                                                       (format nil "~a = ~a.~a" col-name table-name col-name)))
-								                                                   mapped-columns)))
-						                                    (format nil "EXISTS (SELECT ~{~a~^, ~} FROM UNNEST ($~~a) WHERE~{ ~a~^ AND~})"
-							                                          required-columns where))))))
-		                   :params `(,@args (,(if single-row :inout :in) ,typed-array-name ,type-array))
-		                   :param-controls `(,@p-controls ,(sql-typed-array map))))))))))
+            (type-array (format nil "~a.~a_type[]" schema table))
+            (single-row (loop
+                          for slot in primary-keys
+                          always (funcall slot-to-go-p slot))))
+        (loop
+          for column in (filter-slots-by-type class 'db-column-slot-definition)
+          for column-name = (slot-value column 'column-name)
+          for domain = (slot-value column 'domain)
+          for slot-value-p = (funcall slot-to-go-p column)
+          with require-column = nil
+          if (and mapped-column
+                  (eq column mapped-column)
+                  slot-value-p)
+            do (setf require-column column-name)
+          else
+            if (and mapped-columns
+                    (member column mapped-columns :test #'eq)
+                    slot-value-p)
+              collect column-name into required-columns
+          else
+            if (and (member column require-columns :test #'equality)
+                    slot-value-p)
+              collect column-name into required-columns
+          else
+            if slot-value-p
+              collect (list (set-sql-name schema domain)) into args
+              and collect `("~a" ,column) into p-controls
+              and collect column-name into where
+          finally (return
+                    (when (or where require-column)
+                      (values (class-name class)
+                              (make-component
+                               :sql (format nil "DELETE FROM ~a WHERE~{ ~a~^ AND~};"
+                                            table-name
+                                            `(,@(mapcar #'(lambda (column-name)
+                                                            (format nil "~a = $~~a" column-name))
+                                                        where)
+                                              ,(cond (mapped-column
+                                                      (format nil "~a IN (SELECT ~a FROM UNNEST ($~~a))"
+                                                              require-column require-column))
+                                                     (mapped-columns
+                                                      (let ((where (mapcar #'(lambda (column)
+                                                                               (let ((col-name (column-name column)))
+                                                                                 (format nil "~a = ~a.~a" col-name table-name col-name)))
+                                                                           mapped-columns)))
+                                                        (format nil "EXISTS (SELECT ~{~a~^, ~} FROM UNNEST ($~~a) WHERE~{ ~a~^ AND~})"
+                                                                required-columns where))))))
+                               :params `(,@args (,(if single-row :inout :in) ,typed-array-name ,type-array))
+                               :param-controls `(,@p-controls ,(sql-typed-array map)))))))))))
