@@ -15,18 +15,16 @@ reinserted.")
 
 (define-layered-method sync
   :in insert-table
-  :around ((class serialize) component &rest rest)
-  (loop
-    for table in (slot-value (class-of class) 'tables)
-    do (required-values-p class (find-class table)))
-  (call-next-method rest))
+  :around ((class serialize) (component db-table-class) &rest rest)
+  (required-values-p class component)
+  (call-next-layered-method))
 
 
 (define-layered-method generate-procedure
   :in-layer insert-table
   ((class serialize) (component db-table-class) &rest rest &key)
   (declare (ignore rest))
-  (let ((procedure (call-next-method)))
+  (let ((procedure (call-next-layered-method)))
     (setf (slot-value procedure 'name)
 	        (format nil "~(~a~)_insert"
 		              (db-syntax-prep (class-name component))))
