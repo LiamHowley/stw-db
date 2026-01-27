@@ -17,6 +17,10 @@
    :aif
    :awhen
    :self
+   :iterate-extend
+   :for=
+   :collect-into
+   :collect-all
    :scase
    :ensure-list
    :explode-string
