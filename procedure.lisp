@@ -165,7 +165,7 @@ from an instance of serialize, with which to query a database.")
       :in db-layer ((class serialize) (proc procedure))
     (with-slots (p-controls) proc
       (mapcar #'(lambda (control)
-		              (when control
+		              (when (cadr control)
 		                (if (consp (cadr control))
 			                  (loop
 			                    for slot in (cadr control)
