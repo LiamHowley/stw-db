@@ -257,7 +257,7 @@
       (of-type stw.db::enumerated-type enum-slot-value)
       (of-type array enum-values)
       (is string= (car (create-enumerated-types-statement user-handle))
-          "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'stw_test_schema.handle') THEN CREATE TYPE stw_test_schema.handle_AS ENUM ('foo', 'bar', 'baz'); END IF;"))))
+          "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'handle') THEN CREATE TYPE handle AS ENUM ('foo', 'bar', 'baz'); END IF;"))))
 
 
 (define-test keyword...
@@ -299,8 +299,8 @@
     (with-active-layers (db-interface-layer)
 
       (let ((format-components (stw.db::sql-typed-array (find-class 'user-account))))
-	      (is string= "ARRAY[ ROW (~a, ~a, ~a)]::stw_test_schema.user_account_type[]" (car format-components))
-	      (is eql 3 (length (cadr format-components)))
+	      (is string= "ARRAY[ ROW (~a)]::stw_test_schema.user_account_type[]" (car format-components))
+	      (is eql 1 (length (cadr format-components)))
 	      (loop
 	        for slot in (cadr format-components)
 	        do (of-type 'db-column-slot-definition slot)))
@@ -338,13 +338,13 @@
 	        (let ((procedure (generate-procedure *account* clone)))
 	          (of-type stw.db::procedure procedure)
 	          (is equal
-		            '(("stw_test_schema.user_email_id") (:inout "delete_emails" "stw_test_schema.user_email_type[]"))
+		            '(("stw_test_schema.user_email_id") (:inout "delete_emails" "stw_test_schema.user_email_type[]") ("stw_test_schema.user_id_id") (:out "_user_id" :integer))
 		            (slot-value procedure 'stw.db::args))
 	          (is string=
-		            "CALL stw_test_schema.account_update_1e8ac368_5f7a_37e0_8bc1_9b5550350b69 (~a, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_email_type[])"
+		            "CALL stw_test_schema.account_update_1e8ac368_5f7a_37e0_8bc1_9b5550350b69 (~a, ARRAY[ ~{ROW (~a)~^, ~}]::stw_test_schema.user_email_type[], ~a, null)"
 		            (slot-value procedure 'stw.db::p-control))
 	          (is string=
-		            "CALL stw_test_schema.account_update_1e8ac368_5f7a_37e0_8bc1_9b5550350b69 (1, ARRAY[ ROW (E'foo@bar.com')]::stw_test_schema.user_email_type[])"
+		            "CALL stw_test_schema.account_update_1e8ac368_5f7a_37e0_8bc1_9b5550350b69 (1, ARRAY[ ROW (E'foo@bar.com')]::stw_test_schema.user_email_type[], 1, null)"
 		            (update-op-dispatch-statement *account* clone procedure)))))
 
       (let* ((map (stw.db::match-mapping-node (find-class 'account) (find-class 'user-site)))
@@ -417,10 +417,11 @@
     (with-active-layers (update-node)
       (setf (slot-value *user* 'id) 1)
       (let ((clone (clone-object *user*)))
-	      (setf (slot-value *user* 'emails) '("liam@foobaz.com"))
+	      (setf (slot-value *user* 'emails) '("liam@foobaz.com")
+              (slot-value clone 'user-id) 1)
 	      (let ((procedure (generate-procedure *user* clone)))
 	        (is equal
-	            '("DELETE FROM stw_test_schema.user_email WHERE id = $1 AND email IN (SELECT email FROM UNNEST ($2));" "RETURN;")
+	            '("INSERT INTO stw_test_schema.user_id (user_id, id) VALUES ($6, $7);" "DELETE FROM stw_test_schema.user_email WHERE id = $4 AND email IN (SELECT email FROM UNNEST ($5));" "INSERT INTO stw_test_schema.user_email (email, user_id, id) SELECT email, $1, $2 FROM UNNEST($3);" "RETURN;")
 	            (slot-value procedure 'stw.db::sql-list)))))
 
     (with-active-layers (delete-node)
