@@ -296,12 +296,12 @@ sync on an object in the INSERT-NODE context layer.")
 
   (:method
       :in-layer db-layer
-      :around ((class serialize) component &rest rest &key)
+      :around ((class serialize) component &rest rest &key (error-handler #'db-error-handler) &allow-other-keys)
     (multiple-value-bind (statement procedure)
 	      (call-next-method)
       (handler-case (exec-query *db* statement (read-row-to-class class))
 	      (database-error (err)
-	        (funcall (db-error-handler err class component procedure)
+	        (funcall (funcall error-handler err class component procedure)
 		               #'(lambda () (apply #'sync class component rest)))))))
 
   (:method
