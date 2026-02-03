@@ -1,5 +1,6 @@
 (in-package stw.db)
 
+(defparameter *schema* "public")
 
 (define-layered-class db-class
   :in db-layer (base-class)
@@ -11,7 +12,6 @@
   :in db-interface-layer (db-class)
   ((schema
     :initarg :schema
-    :initform "public"
     :reader schema)
    (tables
     :initarg :tables
@@ -67,7 +67,7 @@ Set as alist ((COLUMN . VALUE))")))
 
 (define-layered-class db
   :in db-table-layer (singleton-class db-class)
-  ((schema :initarg :schema :initform "public" :reader schema :type string)
+  ((schema :initarg :schema :reader schema :type string)
    (table :initarg :table :initform nil :reader table :type string)
    (primary-keys :initarg :primary-keys :accessor primary-keys :type (or null cons))
    (foreign-keys :initarg :foreign-keys :initform nil :accessor foreign-keys :type (or null cons))
@@ -428,3 +428,9 @@ dispatching on type."
 
 (defmethod slot-unbound ((class db-interface-class) instance slot-name)
   nil)
+
+(defmethod slot-unbound (class (instance db-wrap) (slot-name (eql 'schema)))
+  (setf (slot-value instance slot-name) *schema*))
+
+(defmethod slot-unbound (class (instance db) (slot-name (eql 'schema)))
+  (setf (slot-value instance slot-name) *schema*))

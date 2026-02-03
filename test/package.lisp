@@ -13,9 +13,6 @@
   (:import-from
    :local-time
    :timestamp)
-  (:shadow
-   :define-db-table
-   :define-key-table)
   (:export :live-tests
 	   :run-tests))
 
@@ -25,9 +22,9 @@
 
 (defmacro run-tests (&optional include-live-tests)
   `(if ,include-live-tests
-       (progn 
+       (progn
          (test 'stw-db)
          (live-tests))
        (test 'stw-db)))
 
-(defparameter *schema* "stw_test_schema")
+(setf *schema* "stw_test_schema")

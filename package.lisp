@@ -173,6 +173,7 @@
    :generate-component
 
    ;; schema
+   :*schema*
    :create-schema
    :set-schema
    :set-privileged-user

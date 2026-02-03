@@ -2,16 +2,6 @@
 
 ;;;; setting up
 
-(defmacro define-db-table (name &body body)
-  `(stw.db:define-db-table ,name
-     ,@body
-     (:schema . ,*schema*)))
-
-(defmacro define-key-table (name &body body)
-  `(stw.db:define-key-table ,name
-     ,@body
-     (:schema . ,*schema*)))
-
 
 (define-key-table user-base () id)
 
