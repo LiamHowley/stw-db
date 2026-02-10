@@ -110,6 +110,16 @@
       (walk list nil))))
 
 
+(defun ensure-column-type (col-type)
+  (etypecase col-type
+      (cons
+       (intern (format nil "~a(~{~a~^, ~a~})" (car col-type) (cdr col-type)) 'keyword))
+      (keyword
+       col-type)
+      ((or string symbol)
+       (intern (string-upcase (db-syntax-prep col-type)) 'keyword))))
+
+
 (defun infix-constraint (list &optional column)
   "Infixing is done in the process of creating a constraint. COLUMN is optional
 but must be provided if not already encoded within LIST."

@@ -195,6 +195,7 @@ but are not themselves foreign keys."))
   :in db-table-layer ((slot db-column-slot-definition)
 		                  &key schema col-type check primary-key foreign-key enumerated-values &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
+    (ensure-column-type col-type)
     (when (eq col-type :serial)
       (setf (slot-value slot 'lock-value) t))
     (when primary-key
