@@ -243,7 +243,7 @@
       :in retrieve-node ((slot db-column-slot-definition))
     (with-slots (col-type schema) slot
       (let ((col-type (cond ((slot-value slot 'enumerated)
-                             (set-sql-name schema (slot-definition-name slot)))
+                             (db-syntax-prep (slot-definition-name slot)))
                             ((eq col-type :serial)
                              :integer)
                             (t col-type))))
