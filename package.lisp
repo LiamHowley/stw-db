@@ -152,6 +152,7 @@
 
    :db-base-column-definition
    :db-column-slot-definition
+   :enumerated-column-slot-definition
    :db-aggregate-slot-definition
 
    ;; ops

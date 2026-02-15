@@ -241,10 +241,8 @@
   :parent stw-db
   (with-active-layers (db-table-layer)
     (let* ((user-handle (find-class 'user-handle))
-           (enum-slot (find-slot-definition user-handle 'handle 'db-column-slot-definition))
-           (enum-slot-value (slot-value enum-slot 'stw.db::enumerated))
-           (enum-values (slot-value enum-slot-value 'values)))
-      (of-type stw.db::enumerated-type enum-slot-value)
+           (enum-slot (find-slot-definition user-handle 'handle 'enumerated-column-slot-definition))
+           (enum-values (slot-value enum-slot 'stw.db::enumerated)))
       (of-type array enum-values)
       (is string= (car (create-enumerated-types-statement user-handle))
           "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'handle') THEN CREATE TYPE handle AS ENUM ('foo', 'bar', 'baz'); END IF;"))))

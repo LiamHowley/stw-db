@@ -2,6 +2,8 @@
   :author "Liam Howley <liam.howley@thespanningtreeweb.ie>"
   :license "MIT"
   :depends-on ("cl-comp"
+               "contextl"
+               "closer-mop"
                "stw-utils"
                "uuid"
                "cl-postgres"

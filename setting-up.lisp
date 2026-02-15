@@ -48,22 +48,20 @@
 
   (:method
       :in db-table-layer ((class db-table-class))
-    (with-slots (enumerated-columns schema) class
+    (with-slots (schema) class
       (loop
-        for slot in (filter-slots-by-type class 'db-column-slot-definition)
-        for instance = (slot-value slot 'enumerated)
-        when instance
-          do (princ (format nil "Creating enumerated type: ~s in schema: ~s~%" (column-name slot) schema))
-          and collect (statement instance)))))
+        for slot in (filter-slots-by-type class 'enumerated-column-slot-definition)
+        do (princ (format nil "Creating enumerated type: ~s in schema: ~s~%" (column-name slot) schema))
+        collect (statement slot)))))
 
 
 (define-layered-method statement
-  :in-layer db-table-layer ((statement enumerated-type))
-  (with-slots (schema column values) statement
-    (let ((enum-type (set-sql-name (slot-value column 'column-name))))
+  :in-layer db-table-layer ((statement enumerated-column-slot-definition))
+  (with-slots (schema column-name enumerated) statement
+    (let ((enum-type (set-sql-name column-name)))
       (format nil
               "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE TYPE ~a AS ENUM (~{'~a'~^, ~}); END IF;"
-              enum-type enum-type (array-to-list values)))))
+              enum-type enum-type (array-to-list enumerated)))))
 
 
 
@@ -110,32 +108,40 @@
 	        constraint-name (format nil "~a_~a_check" (db-syntax-prep table) (db-syntax-prep col-name)))))
 
 
+(define-layered-function column-type (column)
+  (:method 
+      :in-layer db-table-layer ((column enumerated-column-slot-definition))
+    (slot-value column 'column-name))
+  (:method
+      :in-layer db-table-layer ((column db-column-slot-definition))
+    (symbol-name (slot-value column 'col-type))))
+
+
 (define-layered-method clause
   :in-layer db-table-layer ((column db-column-slot-definition))
-  (with-slots (column-name col-type not-null unique enumerated) column
-    (format nil "~(~a~) ~{~a~}"
-	          column-name
-            (list
-             (if enumerated
-                 column-name
-                 (format nil "~a" col-type))
-             (if not-null " NOT NULL" "")
-             (if (eq unique t) " UNIQUE" "")
-             (if (slot-boundp column 'default)
-                 (let ((default (slot-value column 'default)))
-                   (typecase default
-                     (cons
-                      (format nil " DEFAULT ~a(~@[~{~a~^, ~}~])" (car default) (cdr default)))
-                     (integer
-                      (format nil " DEFAULT ~a" default))
-                     (string
-                      (format nil " DEFAULT '~a'" default))
-                     (boolean
-                      (if (eq col-type :boolean)
-                          (format nil " DEFAULT '~a'" (if (eq default t) "t" "f"))
-                          ""))
-                     (t "")))
-                 "")))))
+  (with-slots (column-name not-null col-type unique) column
+    (let ((column-type (column-type column)))
+      (format nil "~(~a~) ~{~a~}"
+              column-name
+              (list
+               column-type
+               (if not-null " NOT NULL" "")
+               (if (eq unique t) " UNIQUE" "")
+               (if (slot-boundp column 'default)
+                   (let ((default (slot-value column 'default)))
+                     (typecase default
+                       (cons
+                        (format nil " DEFAULT ~a(~@[~{~a~^, ~}~])" (car default) (cdr default)))
+                       (integer
+                        (format nil " DEFAULT ~a" default))
+                       (string
+                        (format nil " DEFAULT '~a'" default))
+                       (boolean
+                        (if (eq col-type :boolean)
+                            (format nil " DEFAULT '~a'" (if (eq default t) "t" "f"))
+                            ""))
+                       (t "")))
+                   ""))))))
 
 
 (define-layered-method clause
@@ -295,15 +301,12 @@ so that differing columns of the same type can be applied to a procedure call.")
 				                            domain schema domain (get-column-type column)))))))))
 
 
+(defmethod get-column-type ((column enumerated-column-slot-definition))
+  (column-name column))
 
 (defmethod get-column-type ((column db-column-slot-definition))
-  (with-slots (col-type enumerated schema) column
-    (cond ((eq col-type :serial)
-           :integer)
-          (enumerated
-           (set-sql-name schema (slot-definition-name column)))
-          (t
-           col-type))))
+  (with-slots (col-type) column
+    (if (eq col-type :serial) :integer col-type)))
 
 
 ;;; setting up

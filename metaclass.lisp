@@ -59,7 +59,7 @@ and less than. The list will be walked, using INFIX-LIST, setting the appropriat
     :documentation "when mapping a column, other columns from the same table may have a fixed value.
 Set as alist ((COLUMN . VALUE))")))
 
-(defmethod slot-definition-class ((class stw-interface))
+(defmethod slot-definition-class ((class stw-interface) &key &allow-other-keys)
   'db-aggregate-slot-definition)
 
 
@@ -96,13 +96,19 @@ Set as alist ((COLUMN . VALUE))")))
    (value :initarg :value :initform nil)
    (mapped-by :initform nil :reader mapped-by)
    (column-name :reader column-name)
-   (lock-value :initarg :lock-value :initform nil :reader lock-value)
-   (enumerated :initarg :enumerated-values :initform nil :type array)))
+   (lock-value :initarg :lock-value :initform nil :reader lock-value)))
 
 
+(defclass enumerated-column-slot-definition (db-column-slot-definition)
+  ((store-index :initarg :store-index :reader store-index)
+   (enumerated :initarg :enumerated-values :type array)))
 
-(defmethod slot-definition-class ((class stw-table))
-  'db-column-slot-definition)
+
+(defmethod slot-definition-class ((class stw-table) &key enumerated-values &allow-other-keys)
+  (if enumerated-values
+      'enumerated-column-slot-definition
+      'db-column-slot-definition))
+
 
 (define-layered-class db-interface-class
   :in-layer db-interface-layer (comp-base-class db-wrap) ())
@@ -168,13 +174,6 @@ but are not themselves foreign keys."))
    (no-join :initarg :no-join :initform nil :type boolean :reader no-join)))
 
 
-(define-layered-class enumerated-type
-  :in-layer db-table-layer ()
-  ((schema :initarg :schema)
-   (column :initarg :column)
-   (values :initarg :values :reader enum-values)))
-
-
 (defmethod shared-initialize :after ((class foreign-key) slot-names &rest initargs &key table column schema ref-schema on-update on-delete)
   (unless (and table column)
     (error "Foreign key plist must contain both :TABLE and :COLUMN params"))
@@ -192,8 +191,19 @@ but are not themselves foreign keys."))
 
 
 (define-layered-method initialize-in-context
+  :in db-table-layer ((slot enumerated-column-slot-definition)
+                      &key enumerated-values &allow-other-keys)
+  (setf (slot-value slot 'enumerated)
+        (make-array (length enumerated-values)
+                    :initial-contents enumerated-values
+                    :fill-pointer t
+                    :adjustable t))
+  (call-next-method))
+
+
+(define-layered-method initialize-in-context
   :in db-table-layer ((slot db-column-slot-definition)
-		                  &key schema col-type check primary-key foreign-key enumerated-values &allow-other-keys)
+                      &key schema col-type check primary-key foreign-key &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
     (ensure-column-type col-type)
     (when (eq col-type :serial)
@@ -203,24 +213,16 @@ but are not themselves foreign keys."))
         (setf (slot-value slot 'not-null) t)))
     (when check
       (setf (slot-value slot 'check)
-	          (infill-column check slot-name)))
-    (when enumerated-values
-      (setf (slot-value slot 'enumerated)
-            (make-instance 'enumerated-type
-                           :column slot
-                           :values (make-array (length enumerated-values)
-                                               :initial-contents enumerated-values
-                                               :fill-pointer nil
-                                               :adjustable nil))))
+            (infill-column check slot-name)))
     (when foreign-key
       (let ((schema (getf foreign-key :schema)))
-	      (let ((f-key (apply #'make-instance 'foreign-key
-			                      :schema schema
-			                      :ref-schema (or (getf foreign-key :ref-schema)
-					                                  schema)
-			                      :key slot-name
-			                      foreign-key)))
-	        (setf (slot-value slot 'foreign-key) f-key))))))
+        (let ((f-key (apply #'make-instance 'foreign-key
+                            :schema schema
+                            :ref-schema (or (getf foreign-key :ref-schema)
+                                            schema)
+                            :key slot-name
+                            foreign-key)))
+          (setf (slot-value slot 'foreign-key) f-key))))))
 
 
 
@@ -301,7 +303,6 @@ don't belong in this node or a foreign key is required" self))
 	        (setf tables sorted-tables))))))
 
 
-
 (define-layered-method initialize-in-context
   :in db-table-layer ((class db) &key)
   (with-slots (schema foreign-keys constraints table) class
@@ -312,12 +313,13 @@ don't belong in this node or a foreign key is required" self))
       (setf table (funcall *reserved-keywords-filter* (db-syntax-prep (class-name class)))))
     (map-filtered-slots
      class
-     #'(lambda (slot) (typep slot 'db-column-slot-definition))
+     #'(lambda (slot)
+         (typep slot 'db-column-slot-definition))
      #'(lambda (slot)
          (let ((slot-name (slot-definition-name slot))
                (to-check))
 
-	         (with-slots (domain table-class column-name foreign-key col-type check enumerated) slot
+	         (with-slots (domain table-class column-name foreign-key col-type check) slot
 	           (setf column-name (funcall *reserved-keywords-filter* (db-syntax-prep slot-name))
 		               (slot-value slot 'table) table
 		               table-class class
@@ -326,8 +328,6 @@ don't belong in this node or a foreign key is required" self))
 					                                 (db-syntax-prep (class-name class))
 					                                 (db-syntax-prep slot-name)))
 		               (slot-value slot 'schema) schema)
-             (when enumerated
-               (setf (slot-value enumerated 'schema) schema))
 	           (when foreign-key
 	             (with-slots (ref-table table) foreign-key
 		             (setf ref-table (class-name class))

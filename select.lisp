@@ -239,15 +239,16 @@
 
 (define-layered-function return-var (slot)
 
+
+  (:method
+      :in retrieve-node ((slot enumerated-column-slot-definition))
+    (list (column-name slot) (db-syntax-prep (slot-definition-name slot))))
+
   (:method
       :in retrieve-node ((slot db-column-slot-definition))
     (with-slots (col-type schema) slot
-      (let ((col-type (cond ((slot-value slot 'enumerated)
-                             (db-syntax-prep (slot-definition-name slot)))
-                            ((eq col-type :serial)
-                             :integer)
-                            (t col-type))))
-      (list (column-name slot) col-type))))
+      (let ((col-type (if (eq col-type :serial) :integer col-type)))
+        (list (column-name slot) col-type))))
 
   (:method
       :in retrieve-node ((slot db-aggregate-slot-definition))

@@ -136,7 +136,7 @@ and not null. Returns a boolean.")
 
 
 (defun declared-var (table column &optional prefix)
-  (with-slots (col-type column-name enumerated) column
+  (with-slots (col-type column-name) column
     (let* ((col-type% (get-column-type column))
 	         (column-name (as-prefix column-name))
 	         (column-param (format nil "~@[~a~]_~a" prefix column-name)))
