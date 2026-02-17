@@ -51,8 +51,9 @@
     (with-slots (schema) class
       (loop
         for slot in (filter-slots-by-type class 'enumerated-column-slot-definition)
-        do (princ (format nil "Creating enumerated type: ~s in schema: ~s~%" (column-name slot) schema))
-        collect (statement slot)))))
+        unless (slot-value slot 'store-index)
+          do (princ (format nil "Creating enumerated type: enum_~a in schema: ~s~%" (column-name slot) schema))
+          and collect (statement slot)))))
 
 
 (define-layered-method statement
@@ -109,12 +110,15 @@
 
 
 (define-layered-function column-type (column)
+
   (:method 
       :in-layer db-table-layer ((column enumerated-column-slot-definition))
-    (slot-value column 'column-name))
+    (with-slots (store-index col-type column-name) column
+      (if store-index col-type (format nil "enum_~a" column-name))))
+
   (:method
       :in-layer db-table-layer ((column db-column-slot-definition))
-    (symbol-name (slot-value column 'col-type))))
+    (slot-value column 'col-type)))
 
 
 (define-layered-method clause

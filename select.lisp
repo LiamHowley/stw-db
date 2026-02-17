@@ -222,33 +222,17 @@
 				                               finally (return (if where%
 							                                             `(,@where%% ,where%)
 							                                             where%%))))
-			                  sql-query (concatenate 'string (statement select) ";")))
-                ))
+			                  sql-query (concatenate 'string (statement select) ";")))))
 	          db-function))))))
 
-;; (notany #'(lambda (table)
-;;	     (map-filtered-slots
-;;	      (find-class table)
-;;	      #'(lambda (slot)
-;;		  (typep slot 'db-column-slot-definition))
-;;	      #'(lambda (slot%)
-;;		  (or (eq slot% slot)
-;;		      (with-aggregate-slot slot
-;;			(or (eq slot% column)
-;;			    (member slot% columns :test #'eq)))))))
+
 
 (define-layered-function return-var (slot)
-
-
-  (:method
-      :in retrieve-node ((slot enumerated-column-slot-definition))
-    (list (column-name slot) (db-syntax-prep (slot-definition-name slot))))
+  (:documentation "Variables to be returned.")
 
   (:method
       :in retrieve-node ((slot db-column-slot-definition))
-    (with-slots (col-type schema) slot
-      (let ((col-type (if (eq col-type :serial) :integer col-type)))
-        (list (column-name slot) col-type))))
+      (list (column-name slot) (get-column-type slot)))
 
   (:method
       :in retrieve-node ((slot db-aggregate-slot-definition))

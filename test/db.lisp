@@ -244,8 +244,7 @@
            (enum-slot (find-slot-definition user-handle 'handle 'enumerated-column-slot-definition))
            (enum-values (slot-value enum-slot 'stw.db::enumerated)))
       (of-type array enum-values)
-      (is string= (car (create-enumerated-types-statement user-handle))
-          "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'handle') THEN CREATE TYPE handle AS ENUM ('foo', 'bar', 'baz'); END IF;"))))
+      (is string= "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_handle') THEN CREATE TYPE enum_handle AS ENUM ('foo', 'bar', 'baz'); END IF;" (car (create-enumerated-types-statement user-handle))))))
 
 
 (define-test keyword...

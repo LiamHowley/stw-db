@@ -100,7 +100,14 @@ Set as alist ((COLUMN . VALUE))")))
 
 
 (defclass enumerated-column-slot-definition (db-column-slot-definition)
-  ((store-index :initarg :store-index :reader store-index)
+  ((store-index :initarg :store-index
+                :initform nil
+                :reader store-index
+                :type boolean
+                :documentation "Schemas that conform to a standard may specify an enumerated column
+without clearly defining the enumerated values to be stored. In such circumstances storing the index
+may make sense, leaving the display / logical / readable values to be determined in the application
+layer, thus making the enumerated data portable.")
    (enumerated :initarg :enumerated-values :type array)))
 
 
@@ -192,18 +199,21 @@ but are not themselves foreign keys."))
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((slot enumerated-column-slot-definition)
-                      &key enumerated-values &allow-other-keys)
+                      &rest rest &key enumerated-values store-index &allow-other-keys)
+  (when store-index
+    (setf (slot-value slot 'col-type) :smallint
+          (getf rest :check) `(<= ,(length enumerated-values))))
   (setf (slot-value slot 'enumerated)
         (make-array (length enumerated-values)
                     :initial-contents enumerated-values
                     :fill-pointer t
                     :adjustable t))
-  (call-next-method))
+  (apply #'call-next-layered-method slot rest))
 
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((slot db-column-slot-definition)
-                      &key schema col-type check primary-key foreign-key &allow-other-keys)
+                      &key col-type check primary-key foreign-key &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
     (ensure-column-type col-type)
     (when (eq col-type :serial)
