@@ -60,7 +60,7 @@
   (with-slots (schema column-name enumerated) statement
     (let ((enum-type (set-sql-name column-name)))
       (format nil
-              "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '~a') THEN CREATE TYPE ~a AS ENUM (~{'~a'~^, ~}); END IF;"
+              "IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_~a') THEN CREATE TYPE enum_~a AS ENUM (~{'~a'~^, ~}); END IF;"
               enum-type enum-type (array-to-list enumerated)))))
 
 
@@ -302,7 +302,7 @@ so that differing columns of the same type can be applied to a procedure call.")
 
 
 (defmethod get-column-type ((column enumerated-column-slot-definition))
-  (column-name column))
+  (format nil "enum_~a" (column-name column)))
 
 (defmethod get-column-type ((column db-column-slot-definition))
   (with-slots (col-type) column
