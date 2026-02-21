@@ -306,7 +306,7 @@ and not null. Returns a boolean.")
             (require-columns (or (slot-value map 'mapped-columns)
                                  (ensure-list (slot-value map 'mapped-column)))))
         (iterate-extend
-          (iter:for slot iter:in (filter-slots-by-type table-class 'db-column-slot-definition))
+          (for slot in (filter-slots-by-type table-class 'db-column-slot-definition))
           (for= column-name (slot-value slot 'column-name)
                 domain (slot-value slot 'domain))
           (unless (funcall slot-to-go-p slot)
@@ -322,7 +322,7 @@ and not null. Returns a boolean.")
                                "$~a" required-columns
                                `("~a" ,slot) p-controls)))
           (collect-into column-name columns)
-          (iter:finally
+          (finally
            (return
              (values (class-name table-class)
                      (make-component
@@ -344,7 +344,7 @@ and not null. Returns a boolean.")
   (with-slots (schema table require-columns) class
     (let ((type-array (format nil "~a.~a_type[]" schema table)))
       (iterate-extend
-        (iter:for slot iter:in (filter-slots-by-type class 'db-column-slot-definition))
+        (for slot in (filter-slots-by-type class 'db-column-slot-definition))
         (for= column-name (slot-value slot 'column-name)
               slot-value-p (funcall slot-to-go-p slot))
         (unless slot-value-p
@@ -370,7 +370,7 @@ and not null. Returns a boolean.")
           (funcall process-declared))
         (unless (or (eq slot-value-p :default)
                     (eq slot-value-p :serial))
-          (iter:collect column-name into columns)
+          (collect column-name into columns)
           (cond (declared-var
                  (collect-into column-name required-columns)
                  (funcall process-declared))
@@ -379,7 +379,7 @@ and not null. Returns a boolean.")
                   (list (set-sql-name schema domain)) args
                   "$~a" required-columns
                   `("~a" ,slot) p-controls))))
-        (iter:finally
+        (finally
          (return
            (values (class-name class)
                    (if require-columns

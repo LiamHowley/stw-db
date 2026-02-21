@@ -1,7 +1,7 @@
 (in-package :cl-user)
 
 (defpackage :stw.db
-  (:use :cl)
+  (:use :cl :iterate)
 
   (:import-from
    :stw.util
@@ -19,6 +19,7 @@
    :self
    :iterate-extend
    :for=
+   :with=
    :collect-into
    :collect-all
    :scase
