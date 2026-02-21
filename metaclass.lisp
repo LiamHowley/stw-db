@@ -11,7 +11,6 @@
 (define-layered-class db-wrap
   :in db-interface-layer (db-class)
   ((schema
-    :initarg :schema
     :reader schema)
    (tables
     :initarg :tables
@@ -168,22 +167,27 @@ but are not themselves foreign keys."))
 					                              collect (find-slot-definition maps-table column 'db-column-slot-definition)))))))
 
 
-(define-layered-class foreign-key
-  :in-layer db-table-layer ()
+(defclass key ()
   ((table :initarg :table :reader table)
-   (column :initarg :column :reader column)
-   (key :initarg :key :initform nil :reader key)
    (ref-schema :initarg :ref-schema :initform nil :reader ref-schema)
    (ref-table :initarg :ref-table :initform nil :reader ref-table)
    (schema :initarg :schema :initform nil :reader schema)
    (on-update :initarg :on-update :initform nil :reader on-update)
    (on-delete :initarg :on-delete :initform nil :reader on-delete)
-   (no-join :initarg :no-join :initform nil :type boolean :reader no-join)))
+   (no-join :initarg :no-join :initform nil :type boolean :reader no-join))
+  (:documentation "The prefix 'ref-' indicates the referring table, schema."))
+
+(defclass foreign-key (key)
+  ((column :initarg :column :reader column)
+   (key :initarg :key :initform nil :reader key)))
+
+(defclass composite-key (key)
+  ((columns :initarg :column :initform nil :reader columns)
+   (keys :initarg :key :initform nil :reader keys)))
 
 
-(defmethod shared-initialize :after ((class foreign-key) slot-names &rest initargs &key table column schema ref-schema on-update on-delete)
-  (unless (and table column)
-    (error "Foreign key plist must contain both :TABLE and :COLUMN params"))
+(defmethod shared-initialize
+    :after ((class key) slot-names &rest initargs &key table column schema ref-schema on-update on-delete)
   (unless schema
     (setf (slot-value class 'schema) (schema (find-class table))))
   (unless ref-schema
@@ -236,6 +240,7 @@ but are not themselves foreign keys."))
 
 
 
+
 (defun sort-tables (backtrace-alist)
   (let ((acc))
     (map-tree-depth-first
@@ -261,7 +266,7 @@ but are not themselves foreign keys."))
 
 (define-layered-method initialize-in-context
   :in db-interface-layer ((class db-wrap) &key)
-  (with-slots (foreign-keys tables) class
+  (with-slots (tables) class
 
     ;; Read relevant precedents into tables and each tables foreign-keys
     ;; into the nodes foreign-key slot. Backtrace-table and f-key-table
@@ -310,17 +315,24 @@ but are not themselves foreign keys."))
 	        (awhen (ensure-bound-tables tables sorted-tables)
 	          (warn "the table(s) ~{~a^ ~} are not bound. They either
 don't belong in this node or a foreign key is required" self))
-	        (setf tables sorted-tables))))))
+          (when sorted-tables
+	          (setf tables sorted-tables)))))))
 
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((class db) &key)
-  (with-slots (schema foreign-keys constraints table) class
+  (with-slots (schema constraints table foreign-keys) class
     (mapcar #'(lambda (slot)
                 (slot-makunbound class slot))
             '(primary-keys require-columns))
     (unless table
       (setf table (funcall *reserved-keywords-filter* (db-syntax-prep (class-name class)))))
+
+    ;; foreign-keys
+    (unless foreign-keys
+      (set-foreign-keys class))
+
+    ;; organise column slots
     (map-filtered-slots
      class
      #'(lambda (slot)
@@ -329,7 +341,7 @@ don't belong in this node or a foreign key is required" self))
          (let ((slot-name (slot-definition-name slot))
                (to-check))
 
-	         (with-slots (domain table-class column-name foreign-key col-type check) slot
+	         (with-slots (domain table-class column-name col-type check) slot
 	           (setf column-name (funcall *reserved-keywords-filter* (db-syntax-prep slot-name))
 		               (slot-value slot 'table) table
 		               table-class class
@@ -338,11 +350,6 @@ don't belong in this node or a foreign key is required" self))
 					                                 (db-syntax-prep (class-name class))
 					                                 (db-syntax-prep slot-name)))
 		               (slot-value slot 'schema) schema)
-	           (when foreign-key
-	             (with-slots (ref-table table) foreign-key
-		             (setf ref-table (class-name class))
-		             (unless (member slot-name (mapcar #'key foreign-keys) :test #'eq)
-		               (pushnew foreign-key foreign-keys :test #'eq))))
 
 	           ;; check constraints
 	           (when check
@@ -351,6 +358,89 @@ don't belong in this node or a foreign key is required" self))
 		                 (getf to-check :table) table)
 	             (pushnew to-check constraints :test #'equal))))))))
 
+
+
+(define-layered-function set-foreign-keys (class)
+  (:method
+      :in-layer db-table-layer ((class db))
+    (with-slots (foreign-keys) class
+        (iterate-extend
+          (with= table-functions (make-hash-table :test #'equal)
+                 pkeys nil
+                 composite-key nil)
+          (for slot in (filter-slots-by-type class 'db-column-slot-definition))
+          (awhen (slot-value slot 'foreign-key)
+            ;; prefix t- indicates the referenced table
+            (with-slots (key table ref-table column) self
+              (setf ref-table (class-name class))
+              (for= table-class (find-class table)
+
+                    ;; A closure is used to allow for the accumulation of composite keys
+                    ;; alongside keys that might refer to more than one table.
+                    table-function (or (gethash `(process-key-table ,class ,table-class) table-functions)
+                                       (setf (gethash `(process-key-table ,class ,table-class) table-functions)
+                                             (process-key-table class table-class)))
+                    returns (funcall table-function slot self))
+              (setf pkeys (car returns)
+                    composite-key (cadr returns)
+                    foreign-keys (caddr returns))))
+          (finally
+
+           ;; Ensure a composite key is not incomplete
+           (cond ((and composite-key pkeys)
+                  (error "Composite foreign key is not complete and must refer to a unique constraint"))
+                 ((and composite-key foreign-keys)
+                  (setf foreign-keys `(,@foreign-keys ,composite-key)))
+                 (composite-key
+                  (setf foreign-keys `(,composite-key)))
+                 (foreign-keys
+                  (setf foreign-keys `(,@foreign-keys)))))))))
+
+
+
+(defmethod process-key-table ((key-table db) (referenced-table db))
+  (let* ((pkeys (slot-value referenced-table 'primary-keys))
+         (composite-pkey-p (> (length pkeys) 1))
+         (key-table-name (table key-table))
+         (composite-key (make-instance 'composite-key
+                                       :table (class-name referenced-table)
+                                       :ref-table (class-name key-table)))
+         (foreign-keys (slot-value key-table 'foreign-keys)))
+    #'(lambda (key-column foreign-key)
+        ;; t- prefix indicates the referenced table.
+        (let* ((t-column (find-slot-definition referenced-table (column foreign-key) 'db-column-slot-definition))
+               (member-pkeys-p (member t-column pkeys :test #'eq))
+               (t-column-col-type (get-column-type t-column))
+               (key-col-type (get-column-type key-column)))
+
+          ;;; 1. both t-column and the referring column must agree on type
+          (unless (equal key-col-type t-column-col-type)
+            (error "The column ~s in table ~s with type ~s references the
+column ~s in table ~s with type ~s. Column types must match."
+                   (column-name key-column) key-table-name key-col-type
+                   (column-name t-column) (table referenced-table) t-column-col-type))
+
+          ;;; 2. foreign key must reference a primary key or a unique key
+          (unless (or member-pkeys-p 
+                      (slot-value t-column 'unique))
+            (error "Foreign key ~s in table ~s must refer to a column with unique constraint."
+                   (column-name key-column) key-table-name))
+
+          ;;; 3. Is it a single column foreign key or a composite?
+          (cond ((and member-pkeys-p composite-pkey-p)
+                 ;; composite key required
+                 (with-slots (keys columns) composite-key
+                   (push (slot-definition-name t-column) columns)
+                   (push (slot-value foreign-key 'key) keys)
+                   (setf foreign-keys (remove foreign-key foreign-keys :test #'eq)
+                         pkeys (remove t-column pkeys :test #'eq))))
+                (t
+                 (setf (slot-value foreign-key 'ref-table) (class-name key-table))
+                 (pushnew foreign-key foreign-keys :test #'eq))))
+        (list pkeys
+              (when (columns composite-key)
+                composite-key)
+              foreign-keys))))
 
 
 (defmethod slot-unbound (class (instance db) (slot-name (eql 'primary-keys)))

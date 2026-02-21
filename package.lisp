@@ -55,6 +55,7 @@
    :filter-precedents-by-type
    :find-class-precedent
    :slots-with-values
+   :object-to-plist
    :clone-object
    :equality)
 
@@ -90,14 +91,15 @@
    :close-database
    :exec-query
    :get-postgresql-version
-   :database-error
-   :database-error-code
    :row-reader
    :ignore-row-reader
    :next-row
    :next-field
    :field-name
-   :to-sql-string)
+   :to-sql-string
+   :database-error
+   :database-error-code
+   :database-error-message)
 
   (:import-from
    :atomics

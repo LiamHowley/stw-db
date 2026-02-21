@@ -94,7 +94,8 @@
 
 
 (defun infill-column (list column)
-  (let ((op (car list)))
+  (let ((op (car list))
+        (column (db-syntax-prep column)))
     (when (and (member op '(= > < /= >= <=))
 	             (eql (list-length list) 2))
       (push column (cdr list)))

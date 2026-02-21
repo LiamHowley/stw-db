@@ -179,6 +179,17 @@
 
 
 (define-layered-method statement
+  :in-layer db-table-layer ((statement composite-key))
+  (with-slots (schema keys ref-schema ref-table table columns on-update on-delete) statement
+    (let ((key-names (mapcar #'db-syntax-prep keys))
+	         (table-name (set-sql-name schema table))
+	         (referring-table (set-sql-name ref-schema ref-table))
+	         (constraint (format nil "~a_~a_fkey" schema (db-syntax-prep ref-table)))
+	         (column-names (mapcar #'db-syntax-prep columns)))
+      (format nil "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '~a') THEN ALTER TABLE ~a ADD CONSTRAINT ~a FOREIGN KEY (~{~a~^, ~}) REFERENCES ~a (~{~a~^, ~})~@[ ON UPDATE ~a~]~@[ ON DELETE ~a~]; end if;" constraint referring-table constraint key-names table-name column-names on-update on-delete))))
+
+
+(define-layered-method statement
   :in-layer db-table-layer ((statement foreign-key))
   (with-slots (schema key ref-schema ref-table table column on-update on-delete) statement
     (let* ((root-key (db-syntax-prep key))
@@ -306,7 +317,8 @@ so that differing columns of the same type can be applied to a procedure call.")
 
 
 (defmethod get-column-type ((column enumerated-column-slot-definition))
-  (format nil "enum_~a" (column-name column)))
+  (with-slots (store-index col-type) column
+    (if store-index col-type (format nil "enum_~a" (column-name column)))))
 
 (defmethod get-column-type ((column db-column-slot-definition))
   (with-slots (col-type) column
