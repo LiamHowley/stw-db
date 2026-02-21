@@ -4,17 +4,17 @@
 (define-layered-method get-key
   :in update-node ((old serialize) (new serialize) &rest rest &key)
   (let ((params
-	        (loop
-	          for slot in (filter-slots-by-type (class-of old) 'db-base-column-definition)
-	          for slot-name = (slot-definition-name slot)
-	          for old-value = (slot-value old slot-name)
-	          for new-value = (slot-value new slot-name)
-	          when old-value
-	            collect slot-name into where
-	          when new-value
-	            collect slot-name into set
-	          finally (return (list set where)))))
-    (push params rest)))
+          (loop
+            for slot in (filter-slots-by-type (class-of old) 'db-base-column-definition)
+            for slot-name = (slot-definition-name slot)
+            for old-value = (slot-value old slot-name)
+            for new-value = (slot-value new slot-name)
+            when old-value
+              collect slot-name into where
+            when new-value
+              collect slot-name into set
+            finally (return (list set where)))))
+    `(,(class-of old) ,params ,@rest)))
 
 
 (define-layered-method sync

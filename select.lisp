@@ -69,14 +69,13 @@
 
 (define-layered-method get-key
   :in retrieve-node
-  ((class serialize) component
-   &rest rest &key &allow-other-keys)
+  ((class serialize) component &rest rest &key &allow-other-keys)
   (let ((slots (nth-value 1 (slots-with-values class
-					                                     :type 'db-base-column-definition
-					                                     :filter-if #'(lambda (slot)
-							                                                (when (typep slot 'db-column-slot-definition)
-								                                                (date/time-p (slot-value slot 'col-type))))))))
-    (push slots rest)))
+                                               :type 'db-base-column-definition
+                                               :filter-if #'(lambda (slot)
+                                                              (when (typep slot 'db-column-slot-definition)
+                                                                (date/time-p (slot-value slot 'col-type))))))))
+    `(,(class-of class) ,@slots ,@rest)))
 
 
 (define-layered-method sync

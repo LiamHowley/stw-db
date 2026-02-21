@@ -47,11 +47,11 @@ calling db-template-register.")
   (:method
       :in db-op ((class serialize) component &rest rest &key)
     (let ((slots (nth-value 1 (slots-with-values class))))
-      (push slots rest)))
+      `(,(class-of class) ,@slots ,@rest)))
 
   (:method
       :in db-op ((class serialize) (component db-table-class) &rest rest &key)
-    (class-name component)))
+    `(,(class-of class) ,(class-of component) ,@rest)))
 
 
 
