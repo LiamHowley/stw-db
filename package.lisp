@@ -178,9 +178,12 @@
 
    ;; schema
    :*schema*
+   :schema
+   :nodes
    :create-schema
    :set-schema
    :set-privileged-user
+   :initialize-schema
 
    ;; statement functions
    :create-table-statement

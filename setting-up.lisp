@@ -7,23 +7,53 @@
 
 ;;; schema
 
+
 (define-layered-function create-schema (schema)
   (:method
-      :in db-layer (schema)
-    (princ (format nil "Creating schema: ~a~%" schema))
-    (format nil "CREATE SCHEMA IF NOT EXISTS ~(~a~)" schema)))
+      :in db-layer ((schema schema))
+    (with-slots (schema) schema
+      (princ (format nil "Creating schema: ~a~%" schema))
+      (format nil "CREATE SCHEMA IF NOT EXISTS ~(~a~)" schema))))
+
 
 (define-layered-function set-schema (schema)
   (:method
-      :in db-layer (schema)
-    (princ (format nil "Search path set to: ~a~%" schema))
-    (format nil "SET search_path TO ~(~a~), public" schema)))
+      :in db-layer ((schema schema))
+    (with-slots (schema) schema
+      (princ (format nil "Search path set to: ~a~%" schema))
+       (format nil "SET search_path TO ~(~a~), public" schema))))
+
 
 (define-layered-function set-privileged-user (schema user)
   (:method
-      :in db-layer (schema (user string))
-    (format nil "GRANT ALL PRIVILEGES ON SCHEMA ~(~a~) TO ~a" schema user)))
+      :in db-layer ((schema schema) (user string))
+    (with-slots (schema) schema
+      (format nil "GRANT ALL PRIVILEGES ON SCHEMA ~(~a~) TO ~a" schema user))))
 
+
+(define-layered-function initialize-schema (schema)
+  (:method
+      :in db-interface-layer ((schema schema))
+    (labels ((exec (statement)
+               (exec-query *db* statement))
+             (builder (node name &rest functions)
+               (multiple-value-bind (statement procedure)
+                   (apply #'build-db-component node name functions)
+                 (exec statement)
+                 (exec (slot-value procedure 'p-control)))))
+      (exec (create-schema schema))
+      (exec (set-schema schema))
+      (with-slots (nodes) schema
+        (iterate
+         (for node in nodes)
+         (builder node (format nil "initialize_~(~a~)_types" (db-syntax-prep (class-name node)))
+                  #'create-enumerated-types-statement #'create-pg-composite #'create-typed-domain)
+         (builder node (format nil "initialize_~(~a~)_relations" (db-syntax-prep (class-name node)))
+                  #'create-table-statement))
+        (iterate
+         (for node in nodes)
+         (builder node (format nil "initialize_~(~a~)_keys" (db-syntax-prep (class-name node)))
+                  #'foreign-keys-statements #'index-statement))))))
 
 
 (defun funcall-tables (tables method)

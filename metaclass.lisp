@@ -1,6 +1,11 @@
 (in-package stw.db)
 
-(defparameter *schema* "public")
+(define-layered-class schema 
+  :in db-layer ()
+  ((schema :initarg :schema :initform "public" :reader schema)
+   (nodes :initform nil :accessor nodes)))
+
+(defvar *schema* (make-instance 'schema))
 
 (define-layered-class db-class
   :in db-layer (base-class)
@@ -266,7 +271,7 @@ but are not themselves foreign keys."))
 
 (define-layered-method initialize-in-context
   :in db-interface-layer ((class db-wrap) &key)
-  (with-slots (tables) class
+  (with-slots (tables schema) class
 
     ;; Read relevant precedents into tables and each tables foreign-keys
     ;; into the nodes foreign-key slot. Backtrace-table and f-key-table
@@ -516,15 +521,16 @@ dispatching on type."
 
 (defmacro define-interface-node (name &body body)
   (let ((metaclass
-	        (aif (cddr body)
-	             (aif (assoc :metaclass self)
-		                (prog1
-			                  (cadr self)
-		                  (setf (cddr body) (delete self (cddr body))))
-		                'db-interface-class)
-	             'db-interface-class)))
-    `(define-db-class ,name db-interface-layer ,metaclass
-       ,@body)))
+          (aif (cddr body)
+               (aif (assoc :metaclass self)
+                    (prog1
+                        (cadr self)
+                      (setf (cddr body) (delete self (cddr body))))
+                    'db-interface-class)
+               'db-interface-class)))
+    `(prog1 (define-db-class ,name db-interface-layer ,metaclass
+              ,@body)
+       (pushnew (find-class ',name) (nodes *schema*) :test #'eq))))
 
 
 (defmethod slot-unbound (class (instance db-column-slot-definition) (slot-name (eql 'column-name)))
@@ -535,8 +541,5 @@ dispatching on type."
 (defmethod slot-unbound ((class db-interface-class) instance slot-name)
   nil)
 
-(defmethod slot-unbound (class (instance db-wrap) (slot-name (eql 'schema)))
-  (setf (slot-value instance slot-name) *schema*))
-
-(defmethod slot-unbound (class (instance db) (slot-name (eql 'schema)))
-  (setf (slot-value instance slot-name) *schema*))
+(defmethod slot-unbound (class (instance db-class) (slot-name (eql 'schema)))
+  (setf (slot-value instance slot-name) (schema *schema*)))
