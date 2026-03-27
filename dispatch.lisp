@@ -421,11 +421,16 @@ before the first single quote.")
   (:method
       :in db-layer ((slot db-column-slot-definition) (col-type (eql :text)) (value string))
     (declare (ignore slot))
-    (concatenate 'string "E'" value "'"))
+    (concatenate 'string "E'" (find-and-replace value '((#\' . "''"))) "'"))
+
+  (:method
+      :in db-layer ((slot date/time-column-slot-definition) col-type value)
+    (when value
+      (format nil "'~a'" value)))
 
   ;;; the rest
-  (:method
-      :in db-layer ((slot db-column-slot-definition) col-type value)
+    (:method
+        :in db-layer ((slot db-column-slot-definition) col-type value)
     (cond (value
            (to-sql-string value))
           ((slot-boundp slot 'default)

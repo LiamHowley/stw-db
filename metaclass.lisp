@@ -115,10 +115,20 @@ layer, thus making the enumerated data portable.")
    (enumerated :initarg :enumerated-values :type array)))
 
 
-(defmethod slot-definition-class ((class stw-table) &key enumerated-values &allow-other-keys)
-  (if enumerated-values
-      'enumerated-column-slot-definition
-      'db-column-slot-definition))
+(defclass date/time-column-slot-definition (db-column-slot-definition)
+  ((template :initarg :template
+                :initform nil
+                :type string
+                :documentation "Postgres date/timestamp template e.g. 'dd mm yyyy'")))
+
+
+(defmethod slot-definition-class ((class stw-table) &key enumerated-values col-type template &allow-other-keys)
+  (cond (enumerated-values
+         'enumerated-column-slot-definition)
+        (template
+         'date/time-column-slot-definition)
+        (t
+         'db-column-slot-definition)))
 
 
 (define-layered-class db-interface-class

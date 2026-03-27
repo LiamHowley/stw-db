@@ -147,6 +147,10 @@
       (if store-index col-type (format nil "enum_~a" column-name))))
 
   (:method
+      :in-layer db-table-layer ((column date/time-column-slot-definition))
+    (get-column-type column))
+
+  (:method
       :in-layer db-table-layer ((column db-column-slot-definition))
     (slot-value column 'col-type)))
 
@@ -350,10 +354,16 @@ so that differing columns of the same type can be applied to a procedure call.")
   (with-slots (store-index col-type) column
     (if store-index col-type (format nil "enum_~a" (column-name column)))))
 
+(defmethod get-column-type ((column date/time-column-slot-definition))
+  (with-slots (col-type) column
+    (case col-type
+      ((:time-with-time-zone :time-without-time-zone)
+       (string-upcase (substitute #\space #\- (symbol-name col-type))))
+      (t col-type))))
+
 (defmethod get-column-type ((column db-column-slot-definition))
   (with-slots (col-type) column
     (if (eq col-type :serial) :integer col-type)))
-
 
 ;;; setting up
 

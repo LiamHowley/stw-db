@@ -176,10 +176,7 @@
                              (if select-columns
                                  (setf col-names (mapcar
                                                   #'(lambda (column)
-                                                      (let* ((table-class column)
-                                                             (table (table table-class))
-                                                             (column-name (column-name column)))
-                                                        (set-sql-name table column-name)))
+                                                      (select-column-name column))
                                                   select-columns))
                                  (nconc% col-names columns))))))
                   (when union-queries
@@ -223,6 +220,19 @@
 							                                             where%%))))
 			                  sql-query (concatenate 'string (statement select) ";")))))
 	          db-function))))))
+
+
+(define-layered-function select-column-name (column)
+
+  (:method
+      :in retrieve-node ((column db-column-slot-definition))
+    (with-slots (table-class column-name) column
+      (set-sql-name (table table-class) column-name)))
+
+  (:method
+      :in retrieve-node ((column date/time-column-slot-definition))
+    (with-slots (table-class column-name template) column
+      (format nil "to_char(~a, '~a')" (set-sql-name (table table-class) column-name) template))))
 
 
 
@@ -549,7 +559,7 @@
            (columns (loop for slot in slots
                           do (when (slot-value slot 'primary-key)
                                (setf root-column slot))
-                          collect (set-sql-name table-name (column-name slot)))))
+                          collect (select-column-name slot))))
       (values
        (class-name class)
        (make-select-component
