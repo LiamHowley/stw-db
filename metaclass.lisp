@@ -222,18 +222,20 @@ but are not themselves foreign keys."))
 
 (define-layered-method initialize-in-context
   :in db-table-layer ((slot db-column-slot-definition)
-                      &key col-type check primary-key foreign-key &allow-other-keys)
+                      &key col-type check primary-key foreign-key default &allow-other-keys)
   (let ((slot-name (slot-definition-name slot)))
     (ensure-column-type col-type)
     (when (eq col-type :serial)
       (setf (slot-value slot 'lock-value) t))
-    (when primary-key
-      (unless (eq col-type :serial)
-        (setf (slot-value slot 'not-null) t)))
+    (when (and primary-key
+               (not (eq col-type :serial)))
+      (setf (slot-value slot 'not-null) t))
     (when check
       (setf (slot-value slot 'check)
             (infill-column check slot-name)))
     (when foreign-key
+      (unless default
+        (setf (slot-value slot 'not-null) t))
       (let ((schema (getf foreign-key :schema)))
         (let ((f-key (apply #'make-instance 'foreign-key
                             :schema schema
