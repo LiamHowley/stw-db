@@ -134,6 +134,33 @@ and not null. Returns a boolean.")
       (slot-value class slot-name))))
 
 
+(define-layered-function declare-component (table column function)
+
+  (:method
+      :in-layer insert-node ((table db-root-table) (column db-column-slot-definition) column-value-p)
+    (declare (ignore column-value-p))
+    (with-slots (foreign-key primary-key) column
+      (unless foreign-key
+        (when primary-key
+          (declared-var (as-prefix (slot-value table 'table)) column)))))
+
+  (:method
+      :in-layer insert-node ((table db-table-class) (column db-column-slot-definition) column-value-p)
+    (declare (ignore column-value-p))
+    (with-slots (col-type) column
+      (when (or (slot-boundp column 'default)
+                (eq col-type :serial))
+        (declared-var (as-prefix (slot-value table 'table)) column))))
+
+  (:method
+      :in-layer insert-table ((table db-table-class) (column db-column-slot-definition) column-value-p)
+    (with-slots (require-columns) table
+        (when (or (member column require-columns :test #'equality)
+                  (eq column-value-p :default)
+                  (eq column-value-p :serial))
+          (declared-var (as-prefix (slot-value table 'table)) column)))))
+
+
 
 (defun declared-var (table column &optional prefix)
   (with-slots (col-type column-name) column
@@ -199,31 +226,29 @@ and not null. Returns a boolean.")
       ;; :serial, or a default value.
       (loop
         for column in (filter-slots-by-type class 'db-column-slot-definition)
-        for declared-var = (with-slots (col-type) column
-                             (when (or (slot-boundp column 'default)
-                                       (eq col-type :serial))
-                               (declared-var (as-prefix table) column)))
-        when declared-var
-          collect declared-var into declared-vars%
+        for declare-component = (declare-component class column nil)
+        for return-column-p = (with-slots (col-type foreign-key) column
+                                (unless foreign-key
+                                  (or (slot-boundp column 'default)
+                                      (eq col-type :serial))))
+        when declare-component
+          collect declare-component into declared-vars%
           and collect column into returning-columns%
         finally (setf declared-vars declared-vars%
                       returning-columns returning-columns%))
 
       (map nil #'(lambda (f-key)
-		               (when (funcall f-key-p f-key)
-		                 (with-slots (key column) f-key
-		                   (push (db-syntax-prep key) columns)
-		                   (let ((reference (format nil "_~a_~a"
-						                                    (db-syntax-prep (slot-value f-key 'table))
-						                                    (db-syntax-prep column))))
-			                   ;; If there are no vars as referenced in require-columns, all vars are
-			                   ;; referencing declared variables; i.e. returned results from table(s) insert op
-			                   ;; corresponding to the foreign-keys of the current table.
-			                   (cond (vars
-				                        (push reference vars)
-				                        (push reference reference-vars))
-			                         (t
-				                        (push reference reference-vars)))))))
+                   (when (funcall f-key-p f-key)
+                     (setf columns `(,@(prepare-key f-key) ,@columns))
+                     (let ((references (prepare-reference f-key)))
+                       ;; If there are no vars as referenced in require-columns, all vars are
+                       ;; referencing declared variables; i.e. returned results from table(s) insert op
+                       ;; corresponding to the foreign-keys of the current table.
+                       (cond (vars
+                              (setf vars `(,@references ,@vars)
+                                    reference-vars `(,@references ,@reference-vars)))
+                             (t
+                              (setf reference-vars `(,@references ,@reference-vars)))))))
 	         (foreign-keys class))
 
       ;; Returning values: The class-name of table and a structure object
@@ -262,6 +287,48 @@ and not null. Returns a boolean.")
 			                        (returning-columns
 			                         (mapcar (constantly nil) returning-columns))
 			                        (t (list nil))))))))
+
+
+(define-layered-function prepare-key (key)
+
+  (:method
+      :in-layer insert-node ((key foreign-key))
+    (list (db-syntax-prep (slot-value key 'key))))
+
+  (:method
+      :in-layer insert-node ((key composite-key))
+    (mapcar #'(lambda (key)
+                (db-syntax-prep key))
+            (slot-value key 'keys))))
+
+
+(defun walk-foreign-key (table column function)
+  (let ((referenced-column (find-slot-definition (find-class table) column 'db-column-slot-definition)))
+    (awhen (slot-value referenced-column 'foreign-key)
+      (funcall function self))))
+
+
+(define-layered-function prepare-reference (key)
+
+  (:method
+      :in-layer insert-node ((key foreign-key))
+    (with-slots (table column) key
+      (list 
+       (or (car (walk-foreign-key table column #'prepare-reference))
+           (format nil "_~a_~a"
+                   (db-syntax-prep table)
+                   (db-syntax-prep column))))))
+
+  (:method
+      :in-layer insert-node ((key composite-key))
+    (with-slots (table columns) key
+      (mapcar
+       #'(lambda (column)
+           (or (car (walk-foreign-key table column #'prepare-reference))
+               (format nil "_~a_~a"
+                       (db-syntax-prep table)
+                       (db-syntax-prep column))))
+       columns))))
 
 
 (define-layered-method generate-component
@@ -350,10 +417,7 @@ and not null. Returns a boolean.")
         (unless slot-value-p
           (return))
         (for= domain (slot-value slot 'domain)
-              declared-var (when (or (member slot require-columns :test #'equality)
-                                     (eq slot-value-p :default)
-                                     (eq slot-value-p :serial))
-                             (declared-var (as-prefix table) slot))
+              declared-var (declare-component class slot slot-value-p)
               process-declared #'(lambda ()
                                    (collect-into declared-var declared-vars
                                                  (set-sql-name table (column-name slot)) returning-columns
