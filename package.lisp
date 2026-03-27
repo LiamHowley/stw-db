@@ -10,7 +10,8 @@
    :insert-word
    :walk-branch
    :trie-leaf
-   :insert-word)
+   :insert-word
+   :find-and-replace)
 
   (:import-from
    :stw.util
