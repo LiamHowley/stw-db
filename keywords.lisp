@@ -36,22 +36,23 @@
  "xmlpi" "xmlroot" "xmlserialize" "xmltable"))
 
 
-(defun make-reservations (list)
+(defun make-reservations (list error)
   (let ((hash (make-hash-table
-	       :test #'equal
-	       :size (length list))))
+               :test #'equal
+               :size (length list))))
     (loop
       for word in list
       do (setf (gethash word hash) (concatenate 'string "\"" word "\"")))
     #'(lambda (word)
-	(or (gethash word hash)
-	    word))))
+        (if (gethash word hash)
+            (funcall error word)
+            word))))
 
 (defvar *reserved-keywords-filter*
-  (make-reservations *reserved-keywords*))
+  (make-reservations *reserved-keywords* #'reserved-keyword-error))
 
 (defvar *reserved-function/type-filter*
-  (make-reservations *reserved-function/type-names*))
+  (make-reservations *reserved-function/type-names* #'reserved-function/type-name-error))
 
 ;;(defun make-reserved-keyword-predicate ()
 ;;  (with-reservations *reserved-keywords-p*

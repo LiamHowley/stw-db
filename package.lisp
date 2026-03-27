@@ -211,7 +211,9 @@
    :null-value-error
    :update-key-value-error
    :not-an-error
-   :use-expected-value))
+   :use-expected-value
+   :reserved-keyword-error
+   :reserved-function/type-name-error))
 
 (in-package :stw.db)
 

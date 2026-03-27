@@ -527,6 +527,11 @@ dispatching on type."
        ,@body)))
 
 
+(defmethod slot-unbound (class (instance db-column-slot-definition) (slot-name (eql 'column-name)))
+  (with-slots (column-name) instance
+    (let ((slot-name (slot-definition-name instance)))
+      (setf column-name (funcall *reserved-keywords-filter* slot-name)))))
+
 (defmethod slot-unbound ((class db-interface-class) instance slot-name)
   nil)
 

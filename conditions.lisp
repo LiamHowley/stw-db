@@ -79,3 +79,23 @@ caution. The root keys of a node should match. That they do not match must be de
 occur carelessly."
   (let ((restart (find-restart 'use-expected-value)))
     (when restart (invoke-restart restart))))
+
+
+(define-condition reserved-keyword-error (simple-error)
+  ((word :initarg :word :reader word))
+  (:report
+   (lambda (c s)
+     (format s "~s is a reserved keyword in Postgresql" (word c)))))
+
+(defun reserved-keyword-error (word)
+  (error 'reserved-keyword-error :word word))
+
+
+(define-condition reserved-function/type-name-error (simple-error)
+  ((word :initarg :word :reader word))
+  (:report
+   (lambda (c s)
+     (format s "~s is a reserved function/type name in Postgresql" (word c)))))
+
+(defun reserved-function/type-name-error (word)
+  (error 'reserved-function/type-name-error :word word))
