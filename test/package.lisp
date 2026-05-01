@@ -27,4 +27,4 @@
          (live-tests))
        (test 'stw-db)))
 
-(setf *schema* "stw_test_schema")
+(setf (slot-value *schema* 'schema) "stw_test_schema")

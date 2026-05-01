@@ -144,7 +144,7 @@
   ((sites :maps-table user-site :maps-columns (site ip) :express-as-type :alist :type list)))
 
 
-(define-db-table current-user ()
+(define-db-table active-user ()
   ((id :col-type :integer
        :primary-key t
        :root-key t
@@ -152,13 +152,10 @@
 		                 :column id
 		                 :on-delete :cascade
 		                 :on-update :cascade))
-   (current-timestamp :col-type :timestamptz
+   (present-time :col-type :timestamptz
 		                  :lock-value t
 		                  :default (now))))
 
-
-(define-interface-node active-user (current-user)
-  ())
 
 
 
@@ -249,15 +246,15 @@
 
 (define-test keyword...
   :parent stw-db
-  (let ((*active-user* (make-instance 'active-user :id 1)))
-    (is string= (slot-value (find-class 'current-user) 'stw.db::table) "\"current_user\"")
-    (is string= (slot-value (find-slot-definition (find-class 'current-user) 'current-timestamp 'db-column-slot-definition)
-			                      'stw.db::column-name)
-	      "\"current_timestamp\"")
+  (let ((*active-user* (make-instance 'user :id 1)))
+    (is string= (slot-value (find-class 'active-user) 'stw.db::table) "active_user")
+    (is string= (slot-value (find-slot-definition (find-class 'active-user) 'present-time 'db-column-slot-definition)
+                            'stw.db::column-name)
+	      "present_time")
     (is string=
-	      "CREATE TABLE IF NOT EXISTS stw_test_schema.\"current_user\" (id INTEGER NOT NULL, \"current_timestamp\" TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (id));"
+	      "CREATE TABLE IF NOT EXISTS stw_test_schema.active_user (id INTEGER NOT NULL, present_time TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (id));"
 	      (with-active-layers (db-table-layer)
-	        (create-table-statement (find-class 'current-user))))))
+	        (create-table-statement (find-class 'active-user))))))
 
 
 (define-test mapping...
@@ -404,11 +401,11 @@
     (with-active-layers (update-node)
       (setf (slot-value *user* 'id) 1)
       (let ((clone (clone-object *user*)))
-	      (setf (slot-value *user* 'emails) '("liam@foobaz.com")
+	      (setf (slot-value clone 'emails) '("liam@foobaz.com")
               (slot-value clone 'user-id) 1)
 	      (let ((procedure (generate-procedure *user* clone)))
 	        (is equal
-	            '("INSERT INTO stw_test_schema.user_id (user_id, id) VALUES ($6, $7);" "DELETE FROM stw_test_schema.user_email WHERE id = $4 AND email IN (SELECT email FROM UNNEST ($5));" "INSERT INTO stw_test_schema.user_email (email, user_id, id) SELECT email, $1, $2 FROM UNNEST($3);" "RETURN;")
+	            '("DELETE FROM stw_test_schema.user_email WHERE id = $4 AND email IN (SELECT email FROM UNNEST ($5));" "INSERT INTO stw_test_schema.user_email (email, user_id, id) SELECT email, $1, $2 FROM UNNEST($3);" "RETURN;")
 	            (slot-value procedure 'stw.db::sql-list)))))
 
     (with-active-layers (delete-node)

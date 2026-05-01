@@ -94,6 +94,12 @@
 
 
 (defun infill-column (list column)
+  "Takes a list of arbitrary depth, with sublists of (<operator> <value>),
+and a symbol or string representing the column name. The column name is formatted and
+then pushed into the cdr of the sublist. So for example, the sublist (> 2) with the
+column name 'CRAZY-NUMBER becomes (> \"crazy_number\" 2). As it explicitly searches
+for sublists of length 2, in which it will insert the column name, a sublist of length
+3 or more will be ignored."
   (let ((op (car list))
         (column (db-syntax-prep column)))
     (when (and (member op '(= > < /= >= <=))

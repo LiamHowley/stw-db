@@ -269,8 +269,7 @@ but are not themselves foreign keys."))
      (nreverse
       (sort backtrace-alist
 	          #'(lambda (a b)
-		            (member (car a) (cdr b) :test #'eq))))
-     t)))
+		            (member (car a) (cdr b) :test #'eq)))))))
 
 
 (defun ensure-bound-tables (tables sorted-tables)
@@ -285,6 +284,8 @@ but are not themselves foreign keys."))
   :in db-interface-layer ((class db-wrap) &key)
   (with-slots (tables schema) class
 
+    ;; register the class name with *schema*
+    (pushnew (class-name class) (nodes *schema*) :test #'eq)
     ;; Read relevant precedents into tables and each tables foreign-keys
     ;; into the nodes foreign-key slot. Backtrace-table and f-key-table
     ;; are used for sorting foreign keys based on mutual dependencies.
@@ -333,7 +334,7 @@ but are not themselves foreign keys."))
 	          (warn "the table(s) ~{~a^ ~} are not bound. They either
 don't belong in this node or a foreign key is required" self))
           (when sorted-tables
-	          (setf tables sorted-tables)))))))
+	          (setf tables (nreverse sorted-tables))))))))
 
 
 (define-layered-method initialize-in-context
@@ -540,9 +541,9 @@ dispatching on type."
                       (setf (cddr body) (delete self (cddr body))))
                     'db-interface-class)
                'db-interface-class)))
-    `(prog1 (define-db-class ,name db-interface-layer ,metaclass
-              ,@body)
-       (pushnew (find-class ',name) (nodes *schema*) :test #'eq))))
+    `(define-db-class ,name db-interface-layer ,metaclass
+              ,@body)))
+       
 
 
 (defmethod slot-unbound (class (instance db-column-slot-definition) (slot-name (eql 'column-name)))
