@@ -110,10 +110,14 @@
 
   (multiple-value-bind (slots-with-values slot-names)
       (slots-with-values class
-			                   :type 'db-base-column-definition
-			                   :filter-if #'(lambda (slot)
-					                              (when (typep slot 'db-column-slot-definition)
-					                                (date/time-p (slot-value slot 'col-type)))))
+                         :filter #'filter-columns-by-type
+                         :type 'db-base-column-definition
+                         :filter-if #'(lambda (slot)
+                                        (when (typep slot 'db-column-slot-definition)
+                                            (with-slots (table-class) slot
+                                              (or (member (class-name table-class) ignore-tables :test #'eq)
+                                                  (member (class-name table-class) optional-join :test #'eq)
+                                                  (date/time-p (slot-value slot 'col-type)))))))
     (let* ((base-class (class-of class))
 	         (schema (slot-value base-class 'schema))
 	         (tables (tables base-class))

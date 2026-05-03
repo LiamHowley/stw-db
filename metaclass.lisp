@@ -280,6 +280,36 @@ but are not themselves foreign keys."))
       collect table))
 
 
+(define-layered-function filter-columns-by-type (class of-type)
+  (:documentation "Filter columns and slots for either a table class
+or interface node. In the case of the latter, columns that contain a foreign
+key are excluded in favour of the key column.")
+
+  (:method
+      :in db-layer ((class db-table-class) of-type)
+    (declare (ignore of-type))
+    (map-filtered-slots
+     class
+     #'(lambda (slot)
+         (typep slot 'db-column-slot-definition))))
+
+  (:method
+      :in db-layer ((class db-interface-class) (of-type symbol))
+    (map-filtered-slots
+     class
+     #'(lambda (slot)
+         (typecase slot
+           (db-column-slot-definition
+            (and (typep slot of-type)
+                 (aif (slot-value slot 'foreign-key)
+                      (with-slots (table column) self
+                        (or (not (member table (slot-value class 'tables) :test #'eq))
+                            (not (eq column (slot-definition-name slot)))))
+                      t)))
+           ((or db-aggregate-slot-definition db-base-column-definition)
+            (typep slot of-type)))))))
+
+
 (define-layered-method initialize-in-context
   :in db-interface-layer ((class db-wrap) &key)
   (with-slots (tables schema) class
