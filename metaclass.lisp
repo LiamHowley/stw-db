@@ -315,7 +315,7 @@ key are excluded in favour of the key column.")
   (with-slots (tables schema) class
 
     ;; register the class name with *schema*
-    (pushnew (class-name class) (nodes *schema*) :test #'eq)
+    (pushnew class (nodes *schema*) :test #'eq)
     ;; Read relevant precedents into tables and each tables foreign-keys
     ;; into the nodes foreign-key slot. Backtrace-table and f-key-table
     ;; are used for sorting foreign keys based on mutual dependencies.
