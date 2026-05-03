@@ -5,7 +5,7 @@
 
 (define-test setting-up...
   :parent live-test
-  :depends-on (connecting...)
+  :depends-on (initializing...)
   (let ((*new-account*
           (make-instance 'account
                          :url "foo.com"
