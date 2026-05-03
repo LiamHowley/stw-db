@@ -187,16 +187,16 @@
                     (process-component (gethash union-queries components)))
                   (when union-all-queries
                     (process-component (gethash union-all-queries components)))
-                  (loop
-                    for table in tables
-                    for component = (gethash table components)
-                    unless (or (member table optional-join :test #'eq)
-                               (member table ignore-tables :test #'eq))
-                        do (process-component component)
-                    finally (loop
-                              for optional in optional-join
-                              for component = (gethash optional components)
-                              do (process-component component))))
+                  (iter
+                    (for table in tables)
+                    (for component = (gethash table components))
+                    (when component
+                      (if (member table optional-join :test #'eq)
+                          (collect component into optional-components)
+                          (process-component component)))
+                    (finally (iter
+                               (for component in optional-components)
+                               (process-component component)))))
 
 		            ;; where
 		            (flet ((slot-relevant-p (slot)
@@ -336,52 +336,51 @@
          (return-columns))
 
     (flet ((process-union (query-type tables)
-	           (let* ((union (make-union (make-instance query-type :tables tables)
-				                               slot-value-p))
-		                (component (generate-component union nil :join-to last)))
-	             (setf (gethash tables components) component
-		                 last (lambda (slot)
-			                      (when (member (db-syntax-prep slot) (slot-value union 'col-names) :test #'string=)
-			                        (slot-value union 'alias))))))
-	         (process-table (table join-type)
-	           (multiple-value-bind (table-class component return-columns%)
-		             (generate-component
-		              (or (match-mapping-node class (find-class table))
-		                  (find-class table))
-		              #'(lambda (f-key)
-		                  (with-slots (ref-table no-join) f-key
-			                  (unless no-join
-			                    (member ref-table tables :test #'eq))))
-		              :join-to last
-		              :join-type join-type
-		              :slot-value-p #'(lambda (slot)
-				                            (unless (or (member table union-queries :test #'eq)
-						                                    (member table union-all-queries :test #'eq))
-				                              (funcall slot-value-p slot))))
+             (let* ((union (make-union (make-instance query-type :tables tables)
+                                       slot-value-p))
+                    (component (generate-component union nil :join-to last)))
+               (setf (gethash tables components) component
+                     last (lambda (slot)
+                            (when (member (db-syntax-prep slot) (slot-value union 'col-names) :test #'string=)
+                              (slot-value union 'alias))))))
+           (process-table (table join-type)
+             (multiple-value-bind (table-class component return-columns%)
+                 (generate-component
+                  (or (match-mapping-node class (find-class table))
+                      (find-class table))
+                  #'(lambda (f-key)
+                      (with-slots (ref-table no-join) f-key
+                        (unless no-join
+                          (member ref-table tables :test #'eq))))
+                  :join-to last
+                  :join-type join-type
+                  :slot-value-p #'(lambda (slot)
+                                    (unless (or (member table union-queries :test #'eq)
+                                                (member table union-all-queries :test #'eq))
+                                      (funcall slot-value-p slot))))
                (setf (gethash table-class components) component
                      return-columns (nconc return-columns return-columns%)
                      (slot-value component 'from) (when (eq table (car tables))
-                                                    (set-sql-name schema table)))
-	             (unless (eq join-type :left)
-		             (setf last (lambda (slot)
-			                        (when (find-slot-definition (find-class table) slot 'db-column-slot-definition)
-				                        (or (slot-value component 'alias)
-				                            (set-sql-name schema table)))))))))
+                                                    (set-sql-name schema table))
+                     last (lambda (slot)
+                            (when (find-slot-definition (find-class table) slot 'db-column-slot-definition)
+                              (or (slot-value component 'alias)
+                                  (set-sql-name schema table))))))))
 
       (when union-queries
 	      (process-union 'union-query union-queries))
       (when union-all-queries
 	      (process-union 'union-all-query union-all-queries))
 
-      (loop
-	      for table in tables
-	      unless (or (member table optional-join :test #'eq)
-		               (member table ignore-tables :test #'eq))
-	        do (process-table table :inner)
-	      finally (loop
-		              for optional in optional-join
-		              do (process-table optional :left))))
-
+      (iter
+        (for table in tables)
+        (unless (member table ignore-tables :test #'eq)
+          (if (member table optional-join :test #'eq)
+              (collect table into optional-tables)
+              (process-table table :inner)))
+        (finally (iter
+                   (for optional in optional-tables)
+                   (process-table optional :left)))))
     (values components return-columns)))
 
 

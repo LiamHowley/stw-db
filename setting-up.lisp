@@ -21,7 +21,7 @@
       :in db-layer ((schema schema))
     (with-slots (schema) schema
       (princ (format nil "Search path set to: ~a~%" schema))
-       (format nil "SET search_path TO ~(~a~), public" schema))))
+      (format nil "SET search_path TO ~(~a~), public" schema))))
 
 
 (define-layered-function set-privileged-user (schema user)
