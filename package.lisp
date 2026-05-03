@@ -141,7 +141,7 @@
    :insert-node
    :update-node
    :retrieve-node
-   :delete-node
+   :delete-from
    :insert-table
    :delete-table
 
