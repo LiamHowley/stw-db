@@ -193,8 +193,8 @@ but are not themselves foreign keys."))
   (:documentation "The prefix 'ref-' indicates the referring table, schema."))
 
 (defclass foreign-key (key)
-  ((column :initarg :column :reader column)
-   (key :initarg :key :initform nil :reader key)))
+  ((column :initarg :column :reader column :documentation "referred to by key")
+   (key :initarg :key :initform nil :reader key :documentation "referenced by column")))
 
 (defclass composite-key (key)
   ((columns :initarg :column :initform nil :reader columns)
@@ -246,14 +246,14 @@ but are not themselves foreign keys."))
     (when foreign-key
       (unless default
         (setf (slot-value slot 'not-null) t))
-      (let ((schema (getf foreign-key :schema)))
-        (let ((f-key (apply #'make-instance 'foreign-key
-                            :schema schema
-                            :ref-schema (or (getf foreign-key :ref-schema)
-                                            schema)
-                            :key slot-name
-                            foreign-key)))
-          (setf (slot-value slot 'foreign-key) f-key))))))
+      (let* ((schema (getf foreign-key :schema))
+             (f-key (apply #'make-instance 'foreign-key
+                           :schema schema
+                           :ref-schema (or (getf foreign-key :ref-schema)
+                                           schema)
+                           :key slot-name
+                           foreign-key)))
+          (setf (slot-value slot 'foreign-key) f-key)))))
 
 
 
